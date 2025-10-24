@@ -480,7 +480,24 @@ if __name__ == "__main__":
         # Refresh Fortnox token at startup
         logger.info("Initializing Fortnox connection...")
         if not refresh_fortnox_token():
-            logger.error("Failed to refresh Fortnox token at startup")
+            logger.error("=" * 70)
+            logger.error("❌ CRITICAL: Failed to refresh Fortnox token at startup")
+            logger.error("=" * 70)
+            logger.error("This usually means:")
+            logger.error("  1. FORTNOX_REFRESH_TOKEN is invalid or expired")
+            logger.error("  2. Environment variables have quotes around them (remove quotes!)")
+            logger.error("  3. Token was revoked in Fortnox Developer Portal")
+            logger.error("")
+            logger.error("To fix:")
+            logger.error("  1. Run: ./venv/bin/python get_fortnox_token.py")
+            logger.error("  2. Get fresh tokens")
+            logger.error("  3. Update Railway environment variables (without quotes)")
+            logger.error("=" * 70)
+            logger.error("Bot will sleep for 1 hour to avoid hammering Fortnox API...")
+            logger.error("(This prevents Railway from restarting the bot repeatedly)")
+            logger.error("=" * 70)
+            # Sleep for 1 hour instead of exiting to prevent rapid restart loop
+            time.sleep(3600)
             exit(1)
         
         # Start background token refresh scheduler
