@@ -4,6 +4,10 @@ A Slack bot that integrates with Fortnox API to provide inventory information
 """
 import os
 import logging
+import requests
+import base64
+import threading
+import time
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 from dotenv import load_dotenv
@@ -25,11 +29,102 @@ app = App(
     signing_secret=os.environ.get("SLACK_SIGNING_SECRET")
 )
 
-# Initialize Fortnox client
-fortnox_client = FortnoxClient(
-    access_token=os.environ.get("FORTNOX_ACCESS_TOKEN"),
-    client_secret=os.environ.get("FORTNOX_CLIENT_SECRET")
-)
+# Global variable for Fortnox client (will be initialized after token refresh)
+fortnox_client = None
+current_access_token = None
+
+
+def refresh_fortnox_token():
+    """
+    Refresh the Fortnox access token using the refresh token.
+    Updates the global fortnox_client with the new token.
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    global fortnox_client, current_access_token
+    
+    logger.info("Refreshing Fortnox access token...")
+    
+    # Get credentials from environment
+    refresh_token = os.environ.get("FORTNOX_REFRESH_TOKEN")
+    client_id = os.environ.get("FORTNOX_CLIENT_ID")
+    client_secret = os.environ.get("FORTNOX_CLIENT_SECRET")
+    
+    # Validate required variables
+    if not all([refresh_token, client_id, client_secret]):
+        logger.error("Missing required environment variables for token refresh")
+        if not refresh_token:
+            logger.error("  - FORTNOX_REFRESH_TOKEN not set")
+        if not client_id:
+            logger.error("  - FORTNOX_CLIENT_ID not set")
+        if not client_secret:
+            logger.error("  - FORTNOX_CLIENT_SECRET not set")
+        return False
+    
+    # Create Basic Auth credentials
+    credentials = f"{client_id}:{client_secret}"
+    encoded_credentials = base64.b64encode(credentials.encode()).decode()
+    
+    try:
+        # Make token refresh request
+        response = requests.post(
+            "https://apps.fortnox.se/oauth-v1/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token
+            },
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Authorization": f"Basic {encoded_credentials}"
+            },
+            timeout=10
+        )
+        
+        # Check response
+        if response.status_code == 200:
+            data = response.json()
+            new_access_token = data.get("access_token")
+            
+            if not new_access_token:
+                logger.error("No access token in response")
+                return False
+            
+            # Update in-memory access token
+            current_access_token = new_access_token
+            
+            # Reinitialize Fortnox client with new token
+            fortnox_client = FortnoxClient(
+                access_token=current_access_token,
+                client_secret=client_secret
+            )
+            
+            logger.info("✅ Access token refreshed successfully")
+            logger.info(f"   New token: {new_access_token[:10]}...")
+            logger.info(f"   Expires in: {data.get('expires_in', 3600)} seconds")
+            
+            return True
+        else:
+            logger.error(f"❌ Failed to refresh token: HTTP {response.status_code}")
+            logger.error(f"   Response: {response.text}")
+            return False
+            
+    except requests.exceptions.RequestException as e:
+        logger.error(f"❌ Network error while refreshing token: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"❌ Unexpected error during token refresh: {e}", exc_info=True)
+        return False
+
+
+def token_refresh_scheduler():
+    """
+    Background thread that refreshes the token every 50 minutes.
+    """
+    while True:
+        time.sleep(50 * 60)  # Sleep for 50 minutes
+        logger.info("⏰ Scheduled token refresh triggered")
+        refresh_fortnox_token()
 
 
 def format_articles_message(articles: list, limit: int = 200) -> str:
@@ -349,7 +444,8 @@ if __name__ == "__main__":
             "SLACK_BOT_TOKEN",
             "SLACK_SIGNING_SECRET",
             "SLACK_APP_TOKEN",
-            "FORTNOX_ACCESS_TOKEN",
+            "FORTNOX_REFRESH_TOKEN",
+            "FORTNOX_CLIENT_ID",
             "FORTNOX_CLIENT_SECRET"
         ]
         
@@ -359,6 +455,17 @@ if __name__ == "__main__":
             logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")
             logger.error("Please check your .env file")
             exit(1)
+        
+        # Refresh Fortnox token at startup
+        logger.info("Initializing Fortnox connection...")
+        if not refresh_fortnox_token():
+            logger.error("Failed to refresh Fortnox token at startup")
+            exit(1)
+        
+        # Start background token refresh scheduler
+        logger.info("Starting token refresh scheduler (every 50 minutes)...")
+        refresh_thread = threading.Thread(target=token_refresh_scheduler, daemon=True)
+        refresh_thread.start()
         
         # Start the bot using Socket Mode
         handler = SocketModeHandler(app, os.environ.get("SLACK_APP_TOKEN"))
