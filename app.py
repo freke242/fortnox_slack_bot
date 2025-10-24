@@ -80,6 +80,47 @@ def format_articles_message(articles: list, limit: int = 200) -> str:
     return "\n".join(message_lines)
 
 
+def format_kegs_message(kegs: list) -> str:
+    """
+    Format beer kegs list into a readable Slack message
+    
+    Args:
+        kegs: List of keg dictionaries with name, abv, volume, and quantity
+        
+    Returns:
+        Formatted message string
+    """
+    if not kegs:
+        return "❌ No beer kegs found in stock."
+    
+    # Sort by volume (descending) then by name
+    sorted_kegs = sorted(kegs, key=lambda k: (-k['volume'], k['name']))
+    
+    total_kegs = len(sorted_kegs)
+    total_quantity = sum(keg['quantity'] for keg in sorted_kegs)
+    
+    message_lines = [
+        f"🍺 *Beer Kegs in Stock* ({total_kegs} types, {total_quantity} total kegs)\n",
+        "```",
+        f"{'Description':<45} {'Volume':<10} {'Quantity':<10}",
+        "-" * 70
+    ]
+    
+    for keg in sorted_kegs:
+        # Combine name and ABV as description
+        description = f"{keg['name']} {keg['abv']}%"[:44]
+        volume = f"{keg['volume']}L"
+        quantity = f"{keg['quantity']} keg{'s' if keg['quantity'] > 1 else ''}"
+        
+        message_lines.append(
+            f"{description:<45} {volume:<10} {quantity:<10}"
+        )
+    
+    message_lines.append("```")
+    
+    return "\n".join(message_lines)
+
+
 @app.command("/fortnox-stock")
 def handle_stock_command(ack, command, respond):
     """
@@ -176,6 +217,34 @@ def handle_article_command(ack, command, respond):
         respond(f"❌ Error fetching article: {str(e)}\nPlease check the article number and try again.")
 
 
+@app.command("/kegs")
+def handle_kegs_command(ack, command, respond):
+    """
+    Handle the /kegs slash command
+    Lists all beer kegs in stock from Fortnox
+    
+    Usage:
+        /kegs - Show all beer kegs in stock
+    """
+    # Acknowledge the command request
+    ack()
+    
+    try:
+        logger.info(f"Kegs command received from user {command['user_name']}")
+        
+        # Fetch kegs from Fortnox
+        respond("🔄 Fetching beer kegs from Fortnox...")
+        kegs = fortnox_client.get_beer_kegs_in_stock()
+        
+        # Format and send response
+        message = format_kegs_message(kegs)
+        respond(message)
+        
+    except Exception as e:
+        logger.error(f"Error handling kegs command: {e}", exc_info=True)
+        respond(f"❌ Error fetching beer kegs: {str(e)}\nPlease check your Fortnox API credentials.")
+
+
 @app.event("app_mention")
 def handle_app_mention(event, say):
     """
@@ -195,12 +264,14 @@ def handle_app_mention(event, say):
 • `/fortnox-stock <minimum>` - List articles with at least the specified quantity
 • `/fortnox-stock <minimum> <limit>` - Control minimum stock and display limit
 • `/fortnox-article <number>` - Get details about a specific article
+• `/kegs` - List all beer kegs in stock
 
 *Examples:*
 `/fortnox-stock` - Show all articles in stock
 `/fortnox-stock 10` - Show articles with at least 10 units in stock
 `/fortnox-stock 0 500` - Show all articles, display up to 500 items
 `/fortnox-article 12345` - Show details for article 12345
+`/kegs` - Show all beer kegs in stock
 """
     
     say(help_message)

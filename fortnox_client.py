@@ -173,3 +173,58 @@ class FortnoxClient:
         
         logger.info(f"Found {len(articles_in_stock)} articles in stock")
         return articles_in_stock
+    
+    def get_beer_kegs_in_stock(self) -> List[Dict]:
+        """
+        Retrieve beer kegs that are in stock
+        
+        Filters articles by Swedish naming format: öl/fat/[volume]/[name]/[ABV]
+        where 'öl' = beer, 'fat' = keg
+        
+        Returns:
+            List of keg dictionaries with name, abv, volume, and quantity
+        """
+        logger.info("Fetching beer kegs in stock")
+        articles = self.get_articles()
+        
+        kegs_in_stock = []
+        for article in articles:
+            description = article.get("Description", "")
+            
+            # Skip if no description
+            if not description:
+                continue
+            
+            # Split description by slash
+            parts = description.split('/')
+            
+            # Check if format matches: öl/fat/volume/name/abv
+            if len(parts) >= 5 and parts[0].lower() == 'öl' and parts[1].lower() == 'fat':
+                try:
+                    # Extract volume (convert to int)
+                    volume = int(parts[2])
+                    
+                    # Extract name (may contain slashes, so join remaining parts except last)
+                    name = '/'.join(parts[3:-1])
+                    
+                    # Extract ABV (last part)
+                    abv = parts[-1]
+                    
+                    # Get quantity in stock
+                    stock_quantity = float(article.get("QuantityInStock", 0) or 0)
+                    
+                    # Only include if in stock
+                    if stock_quantity > 0:
+                        kegs_in_stock.append({
+                            "name": name,
+                            "abv": abv,
+                            "volume": volume,
+                            "quantity": int(stock_quantity),
+                            "article_number": article.get("ArticleNumber", "N/A")
+                        })
+                except (ValueError, TypeError) as e:
+                    logger.debug(f"Skipping malformed keg description: {description} - {e}")
+                    continue
+        
+        logger.info(f"Found {len(kegs_in_stock)} beer kegs in stock")
+        return kegs_in_stock
