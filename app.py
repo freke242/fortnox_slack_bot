@@ -93,8 +93,8 @@ def format_kegs_message(kegs: list) -> str:
     if not kegs:
         return "❌ No beer kegs found in stock."
     
-    # Sort by volume (descending) then by name
-    sorted_kegs = sorted(kegs, key=lambda k: (-k['volume'], k['name']))
+    # Sort alphabetically by name
+    sorted_kegs = sorted(kegs, key=lambda k: k['name'])
     
     total_kegs = len(sorted_kegs)
     total_quantity = sum(keg['quantity'] for keg in sorted_kegs)
@@ -102,18 +102,19 @@ def format_kegs_message(kegs: list) -> str:
     message_lines = [
         f"🍺 *Beer Kegs in Stock* ({total_kegs} types, {total_quantity} total kegs)\n",
         "```",
-        f"{'Description':<45} {'Volume':<10} {'Quantity':<10}",
-        "-" * 70
+        f"{'Antal':<9} {'Beskrivning':<50}",
+        "-" * 60
     ]
     
     for keg in sorted_kegs:
+        # Format quantity as [quantity]x[volume]
+        antal = f"{keg['quantity']}x{keg['volume']}"
+        
         # Combine name and ABV as description
-        description = f"{keg['name']} {keg['abv']}%"[:44]
-        volume = f"{keg['volume']}L"
-        quantity = f"{keg['quantity']} keg{'s' if keg['quantity'] > 1 else ''}"
+        beskrivning = f"{keg['name']} {keg['abv']}"
         
         message_lines.append(
-            f"{description:<45} {volume:<10} {quantity:<10}"
+            f"{antal:<9} {beskrivning:<50}"
         )
     
     message_lines.append("```")
