@@ -1,3 +1,8 @@
-slack-bolt==1.18.1
+certifi==2025.8.3
+charset-normalizer==3.4.3
+idna==3.10
 python-dotenv==1.0.0
 requests==2.31.0
+slack-bolt==1.18.1
+slack_sdk==3.36.0
+urllib3==2.5.0

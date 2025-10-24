@@ -1,0 +1,14 @@
+# Exclude from Railway deployment
+.env
+.env.example
+venv/
+__pycache__/
+*.pyc
+.git/
+.gitignore
+test_*.py
+*.md
+!RAILWAY_DEPLOYMENT.md
+debug_curl_command.sh
+.vscode/
+.idea/
