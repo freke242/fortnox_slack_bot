@@ -139,6 +139,35 @@ class FortnoxClient:
         response = self._make_request("GET", f"articles/{article_number}")
         return response.get("Article", {})
     
+    def get_price_from_pricelist(self, price_list: str, article_number: str) -> float:
+        """
+        Retrieve price for an article from a specific price list
+        
+        Args:
+            price_list: Price list code (e.g., "horeca")
+            article_number: The article number to get price for
+            
+        Returns:
+            Price as float, or 0 if not found
+        """
+        try:
+            logger.debug(f"Fetching price for article {article_number} from price list {price_list}")
+            response = self._make_request("GET", f"prices/{price_list}/{article_number}")
+            
+            # The response contains a list of prices with different FromQuantity
+            # We want the base price (FromQuantity = 0)
+            prices = response.get("Prices", [])
+            if prices:
+                for price_entry in prices:
+                    if float(price_entry.get("FromQuantity", 0)) == 0:
+                        return float(price_entry.get("Price", 0) or 0)
+                # If no price with FromQuantity=0, return first price
+                return float(prices[0].get("Price", 0) or 0)
+            return 0.0
+        except Exception as e:
+            logger.debug(f"Could not fetch price for {article_number} from {price_list}: {e}")
+            return 0.0
+    
     def get_articles_in_stock(self, minimum_stock: int = 0) -> List[Dict]:
         """
         Retrieve articles that are in stock
@@ -222,6 +251,13 @@ class FortnoxClient:
                     # Calculate available quantity (stock - reserved)
                     available_quantity = stock_quantity - reserved_quantity
                     
+                    # Get price from article
+                    article_number = article.get("ArticleNumber", "")
+                    try:
+                        price = float(article.get("SalesPrice", 0) or 0)
+                    except (ValueError, TypeError):
+                        price = 0.0
+                    
                     # Only include if in stock
                     if stock_quantity > 0:
                         kegs_in_stock.append({
@@ -231,7 +267,8 @@ class FortnoxClient:
                             "quantity": int(stock_quantity),
                             "reserved": int(reserved_quantity),
                             "available": int(available_quantity),
-                            "article_number": article.get("ArticleNumber", "N/A")
+                            "price": price,
+                            "article_number": article_number
                         })
                 except (ValueError, TypeError) as e:
                     logger.debug(f"Skipping malformed keg description: {description} - {e}")

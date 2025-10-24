@@ -102,38 +102,41 @@ def format_kegs_message(kegs: list, show_all: bool = False) -> str:
     total_reserved = sum(keg['reserved'] for keg in sorted_kegs)
     
     if show_all:
-        # 4-column layout: Finns, Beskrivning, Reserverat, Totalt
+        # 5-column layout: Finns, Beskrivning, Pris, Reserverat, Totalt
         message_lines = [
             f"🍺 *Beer Kegs in Stock* ({total_kegs} types, {total_quantity} total kegs, {total_reserved} reserved)\n",
             "```",
-            f"{'Finns':<9} {'Beskrivning':<35} {'Reserverat':<12} {'Totalt':<9}",
-            "-" * 70
+            f"{'Finns':<9} {'Beskrivning':<30} {'Pris':<8} {'Reserverat':<12} {'Totalt':<9}",
+            "-" * 75
         ]
         
         for keg in sorted_kegs:
             finns = f"{keg['available']}x{keg['volume']}"
-            beskrivning = f"{keg['name']} {keg['abv']}"[:34]
+            beskrivning = f"{keg['name']} {keg['abv']}"[:29]
+            pris = f"{int(keg['price'])}"[:7]
             reserverat = f"{keg['reserved']}x{keg['volume']}"
             totalt = f"{keg['quantity']}x{keg['volume']}"
             
             message_lines.append(
-                f"{finns:<9} {beskrivning:<35} {reserverat:<12} {totalt:<9}"
+                f"{finns:<9} {beskrivning:<30} {pris:<8} {reserverat:<12} {totalt:<9}"
             )
     else:
-        # 2-column layout: Finns, Beskrivning (mobile-friendly)
+        # 3-column layout: Finns, Beskrivning, Pris (mobile-friendly, max 31 chars)
         message_lines = [
             f"🍺 *Beer Kegs in Stock* ({total_kegs} types, {total_quantity} total kegs, {total_reserved} reserved)\n",
             "```",
-            f"{'Finns':<9} {'Beskrivning':<40}",
-            "-" * 30
+            f"{'Finns':<5} {'Beskrivning':<14} {'ABV':<5} {'Pris':<4}",
+            "-" * 31
         ]
         
         for keg in sorted_kegs:
-            finns = f"{keg['available']}x{keg['volume']}"
-            beskrivning = f"{keg['name']} {keg['abv']}"[:39]
+            finns = f"{keg['available']}x{keg['volume']}"[:5]
+            namn = f"{keg['name']}"[:14]
+            abv = f"{keg['abv']}"[:5]
+            pris = f"{int(keg['price'])}"[:4]
             
             message_lines.append(
-                f"{finns:<9} {beskrivning:<40}"
+                f"{finns:<5} {namn:<14} {abv:<5} {pris:<4}"
             )
     
     message_lines.append("```")
