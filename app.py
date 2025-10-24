@@ -11,7 +11,7 @@ import time
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 from dotenv import load_dotenv
-from fortnox_client import FortnoxClient
+from fortnox_client import FortnoxClient, FortnoxRateLimitError
 
 # Load environment variables
 load_dotenv()
@@ -99,6 +99,14 @@ def refresh_fortnox_token():
                 client_secret=client_secret
             )
             
+            # Initialize price lists (find HoReCa and load cache)
+            try:
+                fortnox_client.initialize_price_lists()
+            except Exception as e:
+                logger.warning(f"⚠️  Could not initialize price lists: {e}")
+                logger.warning("Bot will use SalesPrice as fallback for kegs")
+                # Don't fail startup - we can still function without price list
+            
             logger.info("✅ Access token refreshed successfully")
             logger.info(f"   New token: {new_access_token[:10]}...")
             logger.info(f"   Expires in: {data.get('expires_in', 3600)} seconds")
@@ -120,10 +128,11 @@ def refresh_fortnox_token():
 def token_refresh_scheduler():
     """
     Background thread that refreshes the token every 50 minutes.
+    Also refreshes the HoReCa price list cache to get latest prices.
     """
     while True:
         time.sleep(50 * 60)  # Sleep for 50 minutes
-        logger.info("⏰ Scheduled token refresh triggered")
+        logger.info("⏰ Scheduled token refresh triggered (includes price cache refresh)")
         refresh_fortnox_token()
 
 
@@ -283,6 +292,9 @@ def handle_stock_command(ack, command, respond):
         message = format_articles_message(articles, limit=display_limit)
         respond(message)
         
+    except FortnoxRateLimitError as e:
+        logger.warning(f"Rate limit hit on stock command: {e}")
+        respond("⚠️ **Fortnox API rate limit exceeded**\n\nWe've hit the maximum number of API requests. Please wait a few minutes and try again.")
     except Exception as e:
         logger.error(f"Error handling stock command: {e}", exc_info=True)
         respond(f"❌ Error fetching articles: {str(e)}\nPlease check your Fortnox API credentials.")
@@ -331,6 +343,9 @@ def handle_article_command(ack, command, respond):
         
         respond(message)
         
+    except FortnoxRateLimitError as e:
+        logger.warning(f"Rate limit hit on article command: {e}")
+        respond("⚠️ **Fortnox API rate limit exceeded**\n\nWe've hit the maximum number of API requests. Please wait a few minutes and try again.")
     except Exception as e:
         logger.error(f"Error handling article command: {e}", exc_info=True)
         respond(f"❌ Error fetching article: {str(e)}\nPlease check the article number and try again.")
@@ -359,6 +374,9 @@ def handle_fat_command(ack, command, respond):
         message = format_kegs_message(kegs, show_all=False)
         respond(message)
         
+    except FortnoxRateLimitError as e:
+        logger.warning(f"Rate limit hit on fat command: {e}")
+        respond("⚠️ **Fortnox API rate limit exceeded**\n\nWe've hit the maximum number of API requests. Please wait a few minutes and try again.")
     except Exception as e:
         logger.error(f"Error handling fat command: {e}", exc_info=True)
         respond(f"❌ Error fetching beer kegs: {str(e)}\nPlease check your Fortnox API credentials.")
@@ -387,6 +405,9 @@ def handle_fat_detaljerat_command(ack, command, respond):
         message = format_kegs_message(kegs, show_all=True)
         respond(message)
         
+    except FortnoxRateLimitError as e:
+        logger.warning(f"Rate limit hit on fat-detaljerat command: {e}")
+        respond("⚠️ **Fortnox API rate limit exceeded**\n\nWe've hit the maximum number of API requests. Please wait a few minutes and try again.")
     except Exception as e:
         logger.error(f"Error handling fat-detaljerat command: {e}", exc_info=True)
         respond(f"❌ Error fetching beer kegs: {str(e)}\nPlease check your Fortnox API credentials.")

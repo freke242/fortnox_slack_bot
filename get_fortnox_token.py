@@ -117,8 +117,8 @@ def generate_authorization_url(client_id: str, state: str) -> str:
     params = {
         'client_id': client_id,
         'redirect_uri': REDIRECT_URI,
-        # Scopes for warehouse: article, warehouse, warehousecustomdocument + companyinformation base
-        'scope': 'companyinformation article warehouse warehousecustomdocument',
+        # Scopes for warehouse: article, warehouse, warehousecustomdocument + price + companyinformation base
+        'scope': 'companyinformation article warehouse warehousecustomdocument price',
         'state': state,
         'access_type': 'offline',
         'account_type': 'service',  # Service account for production use

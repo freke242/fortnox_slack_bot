@@ -77,6 +77,11 @@ The `fortnox_client.py` implements automatic pagination:
 ### Rate Limits
 - **Fortnox API**: 300 requests/minute per access token
 - **Current usage**: ~2 requests per full article fetch (well within limits)
+- **Rate limit handling**: All commands and test scripts now handle rate limit errors gracefully
+  - When rate limit is hit (HTTP 429), a `FortnoxRateLimitError` is raised
+  - Processing stops immediately to prevent cascading failures
+  - User-friendly message is displayed: "API rate limit exceeded, please wait a few minutes"
+  - ⚠️ **IMPORTANT**: If you hit rate limits during testing, wait 3-5 minutes before retrying
 
 ### Data Type Handling
 - `QuantityInStock` may be returned as string or number - code handles both
@@ -88,6 +93,14 @@ The `fortnox_client.py` implements automatic pagination:
 
 ### "Command 'python' not found"
 **Solution**: Use `./venv/bin/python` instead of `python`
+
+### "Fortnox API rate limit exceeded (429)"
+**Cause**: Too many API requests in a short period (>300 per minute)
+**Solution**: 
+1. Wait 3-5 minutes before making new requests
+2. The bot automatically stops processing when rate limit is hit
+3. All test scripts now handle this gracefully with clear error messages
+4. **Prevention**: Avoid running multiple test scripts simultaneously
 
 ### "ModuleNotFoundError: No module named 'X'"
 **Solution**: 
@@ -124,6 +137,17 @@ The `fortnox_client.py` implements automatic pagination:
 
 ## 🚀 Recent Changes
 
+### 2025-10-24: Rate Limit Protection & Price Lists
+- **Rate limit handling**: Added `FortnoxRateLimitError` exception
+  - All Slack commands now stop immediately on rate limit (HTTP 429)
+  - All test scripts gracefully handle rate limits with clear messages
+  - Prevents cascading failures that could ban access tokens
+- **HoReCa price list integration**:
+  - Dynamic lookup of HoReCa price list at startup
+  - Beer keg prices now fetched from price list B (HoReCa)
+  - Fallback to `SalesPrice` if price list entry not found
+- **Token refresh automation**: Built into app startup and runs every 50 minutes
+
 ### 2025-10-21: Pagination Implementation
 - Implemented automatic pagination in `get_articles()`
 - Now retrieves all 519 articles instead of just first page (~43 articles)
@@ -146,8 +170,13 @@ The `fortnox_client.py` implements automatic pagination:
 2. **Check logs**: Bot logs contain useful debugging information
 3. **Environment variables**: Sensitive data is in `.env` (not committed to git)
 4. **Pagination**: Remember that Fortnox API has limits - always implement pagination for lists
-5. **Rate limits**: 300 req/min is generous - caching not critical for current usage
+5. **Rate limits**: 
+   - 300 requests/minute limit enforced by Fortnox
+   - All code includes `FortnoxRateLimitError` handling
+   - Testing multiple price lists can quickly hit the limit
+   - **Best practice**: Test with small datasets first, then scale up
+6. **Error handling**: Always catch `FortnoxRateLimitError` separately from generic exceptions
 
 ---
 
-**Last Updated**: 2025-10-21
+**Last Updated**: 2025-10-24

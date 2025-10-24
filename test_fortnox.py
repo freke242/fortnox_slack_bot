@@ -4,7 +4,7 @@ Run this to verify your Fortnox credentials are working
 """
 import os
 from dotenv import load_dotenv
-from fortnox_client import FortnoxClient
+from fortnox_client import FortnoxClient, FortnoxRateLimitError
 
 def test_fortnox_connection():
     """Test the Fortnox API connection and credentials"""
@@ -63,6 +63,16 @@ def test_fortnox_connection():
         print()
         return True
         
+    except FortnoxRateLimitError as e:
+        print()
+        print("=" * 50)
+        print("⚠️  Test stopped - Rate limit exceeded!")
+        print(f"   {str(e)}")
+        print()
+        print("The Fortnox API has a limit of 300 requests per minute.")
+        print("Please wait a few minutes before running tests again.")
+        print()
+        return False
     except Exception as e:
         print()
         print("=" * 50)
