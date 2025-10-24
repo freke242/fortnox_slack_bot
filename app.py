@@ -106,19 +106,20 @@ def format_kegs_message(kegs: list, show_all: bool = False) -> str:
         message_lines = [
             f"🍺 *Beer Kegs in Stock* ({total_kegs} types, {total_quantity} total kegs, {total_reserved} reserved)\n",
             "```",
-            f"{'Finns':<9} {'Beskrivning':<30} {'Pris':<8} {'Reserverat':<12} {'Totalt':<9}",
-            "-" * 75
+            f"{'Finns':<5} {'Beskrivning':<14} {'ABV':<5} {'Pris':<6} {'Reserv.':<7} {'Totalt':<6}",
+            "-" * 48
         ]
         
         for keg in sorted_kegs:
-            finns = f"{keg['available']}x{keg['volume']}"
-            beskrivning = f"{keg['name']} {keg['abv']}"[:29]
-            pris = f"{int(keg['price'])}"[:7]
-            reserverat = f"{keg['reserved']}x{keg['volume']}"
-            totalt = f"{keg['quantity']}x{keg['volume']}"
+            available = f"{keg['available']}x{keg['volume']}"[:5]
+            name = f"{keg['name']}"[:14]
+            abv = f"{keg['abv']}"[:5]
+            price = f"{int(keg['price'])}"[:6]
+            reserved = f"{keg['reserved']}x{keg['volume']}"[:7]
+            total = f"{keg['quantity']}x{keg['volume']}"[:6]
             
             message_lines.append(
-                f"{finns:<9} {beskrivning:<30} {pris:<8} {reserverat:<12} {totalt:<9}"
+                f"{available:<5} {name:<14} {abv:<5} {price:<6} {reserved:<7} {total:<6}"
             )
     else:
         # 3-column layout: Finns, Beskrivning, Pris (mobile-friendly, max 31 chars)
@@ -130,13 +131,13 @@ def format_kegs_message(kegs: list, show_all: bool = False) -> str:
         ]
         
         for keg in sorted_kegs:
-            finns = f"{keg['available']}x{keg['volume']}"[:5]
-            namn = f"{keg['name']}"[:14]
+            available = f"{keg['available']}x{keg['volume']}"[:5]
+            name = f"{keg['name']}"[:14]
             abv = f"{keg['abv']}"[:5]
-            pris = f"{int(keg['price'])}"[:4]
+            price = f"{int(keg['price'])}"[:4]
             
             message_lines.append(
-                f"{finns:<5} {namn:<14} {abv:<5} {pris:<4}"
+                f"{available:<5} {name:<14} {abv:<5} {price:<4}"
             )
     
     message_lines.append("```")
