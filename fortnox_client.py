@@ -77,19 +77,53 @@ class FortnoxClient:
     
     def get_articles(self, filter_params: Optional[Dict] = None) -> List[Dict]:
         """
-        Retrieve a list of articles from Fortnox
+        Retrieve a list of articles from Fortnox with pagination support
         
         Args:
             filter_params: Optional filters like articlenumber, description, etc.
             
         Returns:
-            List of article dictionaries
+            List of article dictionaries (all pages combined)
         """
-        logger.info("Fetching articles from Fortnox")
-        response = self._make_request("GET", "articles", params=filter_params)
-        articles = response.get("Articles", [])
-        logger.info(f"Retrieved {len(articles)} articles")
-        return articles
+        logger.info("Fetching articles from Fortnox with pagination")
+        
+        # Initialize pagination parameters
+        limit = 500  # Maximum allowed by Fortnox API
+        offset = 0
+        all_articles = []
+        
+        # Merge filter params with pagination params
+        if filter_params is None:
+            filter_params = {}
+        
+        while True:
+            # Set pagination parameters
+            params = filter_params.copy()
+            params['limit'] = limit
+            params['offset'] = offset
+            
+            logger.info(f"Fetching page: offset={offset}, limit={limit}")
+            response = self._make_request("GET", "articles", params=params)
+            articles = response.get("Articles", [])
+            
+            if not articles:
+                # No more articles to fetch
+                logger.info("No more articles to fetch")
+                break
+            
+            all_articles.extend(articles)
+            logger.info(f"Retrieved {len(articles)} articles (total so far: {len(all_articles)})")
+            
+            # If we got fewer articles than the limit, we've reached the end
+            if len(articles) < limit:
+                logger.info("Reached last page of results")
+                break
+            
+            # Move to next page
+            offset += limit
+        
+        logger.info(f"Retrieved {len(all_articles)} total articles")
+        return all_articles
     
     def get_article_by_number(self, article_number: str) -> Dict:
         """
@@ -121,7 +155,12 @@ class FortnoxClient:
         # Filter articles that have stock
         articles_in_stock = []
         for article in articles:
-            stock_quantity = article.get("QuantityInStock", 0)
+            # Convert stock_quantity to float (API may return string or number)
+            try:
+                stock_quantity = float(article.get("QuantityInStock", 0) or 0)
+            except (ValueError, TypeError):
+                stock_quantity = 0
+            
             if stock_quantity > minimum_stock:
                 articles_in_stock.append({
                     "ArticleNumber": article.get("ArticleNumber", "N/A"),

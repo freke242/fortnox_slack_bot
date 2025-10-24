@@ -12,6 +12,7 @@ import os
 import sys
 import requests
 import logging
+import base64
 from dotenv import load_dotenv, set_key
 from pathlib import Path
 
@@ -53,17 +54,22 @@ def refresh_access_token():
     
     logger.info("Refreshing Fortnox access token...")
     
+    # Create Basic Auth credentials (Base64 of client_id:client_secret)
+    credentials = f"{client_id}:{client_secret}"
+    encoded_credentials = base64.b64encode(credentials.encode()).decode()
+    
     try:
         # Make token refresh request
         response = requests.post(
             "https://apps.fortnox.se/oauth-v1/token",
             data={
                 "grant_type": "refresh_token",
-                "refresh_token": refresh_token,
-                "client_id": client_id,
-                "client_secret": client_secret
+                "refresh_token": refresh_token
             },
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Authorization": f"Basic {encoded_credentials}"
+            },
             timeout=10
         )
         

@@ -11,7 +11,8 @@ fortnox_slack_bot/
 ├── 🏢 FORTNOX_SETUP.md          # Detailed Fortnox service account setup
 ├── 🚀 DEPLOYMENT.md             # Production deployment guide
 ├── 🤝 CONTRIBUTING.md           # Contribution guidelines
-└── 📝 CHANGELOG.md              # Version history & roadmap
+├── 📝 CHANGELOG.md              # Version history & roadmap
+└── 🤖 agents.md                 # AI agent reference documentation
 ```
 
 ---
@@ -35,6 +36,12 @@ fortnox_slack_bot/
 1. **[README.md](README.md)** - Understand the project
 2. **[CONTRIBUTING.md](CONTRIBUTING.md)** - Learn how to contribute
 3. **[CHANGELOG.md](CHANGELOG.md)** - See what's planned
+
+### For AI Coding Agents
+
+1. **[agents.md](agents.md)** - Essential commands and context
+2. **[README.md](README.md)** - Project overview
+3. **[CONTRIBUTING.md](CONTRIBUTING.md)** - Code style guidelines
 
 ---
 
@@ -85,6 +92,14 @@ fortnox_slack_bot/
 - Current version features
 - Planned enhancements
 - Roadmap for future releases
+
+### [agents.md](agents.md) 🤖
+**AI agent reference**
+- Development environment setup
+- Testing commands with venv
+- Key implementation details
+- Common issues and solutions
+- Recent changes and context
 
 ---
 
@@ -153,10 +168,10 @@ fortnox_slack_bot/
 
 ## 📊 Documentation Stats
 
-- **Total Documents**: 6 markdown files
+- **Total Documents**: 7 markdown files
 - **Total Scripts**: 7 Python tools
 - **Setup Time**: ~10 minutes
-- **Last Updated**: 2025-09-30
+- **Last Updated**: 2025-10-21
 
 ---
 

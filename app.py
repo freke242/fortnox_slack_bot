@@ -32,7 +32,7 @@ fortnox_client = FortnoxClient(
 )
 
 
-def format_articles_message(articles: list, limit: int = 50) -> str:
+def format_articles_message(articles: list, limit: int = 200) -> str:
     """
     Format articles list into a readable Slack message
     
@@ -85,6 +85,11 @@ def handle_stock_command(ack, command, respond):
     """
     Handle the /fortnox-stock slash command
     Lists all articles in stock from Fortnox
+    
+    Usage:
+        /fortnox-stock - Show all articles (default limit: 200)
+        /fortnox-stock <minimum> - Show articles with minimum stock quantity
+        /fortnox-stock <minimum> <limit> - Set both minimum stock and display limit
     """
     # Acknowledge the command request
     ack()
@@ -92,16 +97,22 @@ def handle_stock_command(ack, command, respond):
     try:
         logger.info(f"Stock command received from user {command['user_name']}")
         
-        # Parse optional minimum stock parameter
+        # Parse optional parameters: minimum stock and display limit
         text = command.get('text', '').strip()
         minimum_stock = 0
+        display_limit = 200  # Default limit
         
         if text:
+            parts = text.split()
             try:
-                minimum_stock = int(text)
-                logger.info(f"Filtering by minimum stock: {minimum_stock}")
+                if len(parts) >= 1:
+                    minimum_stock = int(parts[0])
+                    logger.info(f"Filtering by minimum stock: {minimum_stock}")
+                if len(parts) >= 2:
+                    display_limit = int(parts[1])
+                    logger.info(f"Display limit set to: {display_limit}")
             except ValueError:
-                respond("⚠️ Invalid parameter. Usage: `/fortnox-stock [minimum_quantity]`")
+                respond("⚠️ Invalid parameter. Usage: `/fortnox-stock [minimum_quantity] [display_limit]`")
                 return
         
         # Fetch articles from Fortnox
@@ -109,7 +120,7 @@ def handle_stock_command(ack, command, respond):
         articles = fortnox_client.get_articles_in_stock(minimum_stock=minimum_stock)
         
         # Format and send response
-        message = format_articles_message(articles)
+        message = format_articles_message(articles, limit=display_limit)
         respond(message)
         
     except Exception as e:
@@ -180,12 +191,15 @@ def handle_app_mention(event, say):
 
 *Available Commands:*
 
-• `/fortnox-stock` - List all articles in stock
+• `/fortnox-stock` - List all articles in stock (up to 200 items)
 • `/fortnox-stock <minimum>` - List articles with at least the specified quantity
+• `/fortnox-stock <minimum> <limit>` - Control minimum stock and display limit
 • `/fortnox-article <number>` - Get details about a specific article
 
-*Example:*
+*Examples:*
+`/fortnox-stock` - Show all articles in stock
 `/fortnox-stock 10` - Show articles with at least 10 units in stock
+`/fortnox-stock 0 500` - Show all articles, display up to 500 items
 `/fortnox-article 12345` - Show details for article 12345
 """
     
