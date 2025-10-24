@@ -210,8 +210,17 @@ class FortnoxClient:
                     # Extract ABV (last part)
                     abv = parts[-1]
                     
-                    # Get quantity in stock
+                    # Get quantity in stock (total)
                     stock_quantity = float(article.get("QuantityInStock", 0) or 0)
+                    
+                    # Get reserved quantity
+                    try:
+                        reserved_quantity = float(article.get("ReservedQuantity", 0) or 0)
+                    except (ValueError, TypeError):
+                        reserved_quantity = 0
+                    
+                    # Calculate available quantity (stock - reserved)
+                    available_quantity = stock_quantity - reserved_quantity
                     
                     # Only include if in stock
                     if stock_quantity > 0:
@@ -220,6 +229,8 @@ class FortnoxClient:
                             "abv": abv,
                             "volume": volume,
                             "quantity": int(stock_quantity),
+                            "reserved": int(reserved_quantity),
+                            "available": int(available_quantity),
                             "article_number": article.get("ArticleNumber", "N/A")
                         })
                 except (ValueError, TypeError) as e:
