@@ -27,7 +27,14 @@ class TokenManager:
         Args:
             token_file: Path to the JSON file for storing tokens
         """
-        self.token_file = Path(token_file)
+        # Use Railway volume if available, otherwise use current directory
+        volume_path = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
+        if volume_path:
+            self.token_file = Path(volume_path) / token_file
+            logger.info(f"Using Railway volume for tokens: {self.token_file}")
+        else:
+            self.token_file = Path(token_file)
+        
         self.lock = Lock()  # Thread-safe access
         
     def load_tokens(self) -> Optional[Dict[str, str]]:

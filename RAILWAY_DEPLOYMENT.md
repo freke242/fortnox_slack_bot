@@ -71,14 +71,32 @@ Refreshing Fortnox access token...
 
 ## Token Management (NEW - 2025-10-25)
 
-The bot now uses persistent file storage for tokens (`fortnox_tokens.json`) to handle Fortnox's token rotation:
+The bot uses persistent file storage for tokens (`fortnox_tokens.json`) to handle Fortnox's token rotation.
 
-- **First deploy**: Bot auto-creates `fortnox_tokens.json` from environment variables
-- **Token rotation**: When Fortnox issues new refresh tokens, they're saved to the file
-- **Survives restarts**: Railway persists the token file across deployments
-- **No manual updates**: You no longer need to update Railway env vars when tokens refresh
+### ⚠️ CRITICAL: Railway Volumes Required
 
-**This fixes the "invalid_grant" error that previously stopped the bot after ~50 minutes.**
+**Railway containers are ephemeral** - the token file is lost on every deployment!
+
+Without a volume:
+- ❌ Bot reinitializes from environment variables on EVERY deploy
+- ❌ If env vars have old tokens → "invalid_grant" error
+- ❌ You must update env vars with fresh tokens after each deployment
+
+**SOLUTION**: Set up a Railway Volume for persistent storage.
+
+👉 **See [RAILWAY_VOLUME_SETUP.md](./RAILWAY_VOLUME_SETUP.md) for step-by-step instructions**
+
+### How Token Management Works
+
+With volume:
+- ✅ **First deploy**: Bot creates `fortnox_tokens.json` from environment variables
+- ✅ **Token rotation**: New refresh tokens saved to volume (survives redeploys)
+- ✅ **Redeploys**: Bot loads existing tokens from volume
+- ✅ **No manual updates**: Tokens persist automatically
+
+Without volume:
+- ⚠️ Token file recreated on every deploy from (potentially stale) env vars
+- ⚠️ Must update env vars manually when tokens change
 
 ## Troubleshooting
 
