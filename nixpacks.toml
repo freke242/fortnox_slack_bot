@@ -5,4 +5,4 @@ nixPkgs = ["python39"]
 cmds = ["pip install -r requirements.txt"]
 
 [start]
-cmd = "python app.py"
+cmd = "python debug_railway.py && python app.py"
