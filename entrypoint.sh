@@ -12,7 +12,7 @@ if [ "$(id -u)" = "0" ]; then
     
     # Create botuser if it doesn't exist
     if ! id -u botuser > /dev/null 2>&1; then
-        adduser -D -u 1000 botuser
+        useradd -m -u 1000 -s /bin/bash botuser
         echo "✅ Created botuser (uid 1000)"
     fi
     
@@ -29,7 +29,7 @@ if [ "$(id -u)" = "0" ]; then
     
     echo "🔒 Dropping to non-root user (botuser)..."
     # Use su to switch to botuser and run the app
-    exec su botuser -c "python /app/app.py"
+    exec su -s /bin/sh botuser -c "cd /app && exec python app.py"
 else
     echo "Already running as non-root user"
     exec python /app/app.py
