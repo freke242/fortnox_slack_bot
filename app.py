@@ -8,6 +8,7 @@ import requests
 import base64
 import threading
 import time
+from datetime import datetime
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 from dotenv import load_dotenv
@@ -222,14 +223,22 @@ def format_kegs_message(kegs: list, show_all: bool = False) -> str:
     total_quantity = sum(keg['quantity'] for keg in sorted_kegs)
     total_reserved = sum(keg['reserved'] for keg in sorted_kegs)
     
+    # Get current timestamp
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+    
+    # Common header for both layouts
+    message_lines = [
+        f"🍺 *Antal fat i lager* ({total_kegs} sorter, {total_quantity} fat totalt, {total_reserved} reserverade)",
+        f"_{current_time}_\n",
+        "```"
+    ]
+    
     if show_all:
         # 5-column layout: Finns, Beskrivning, Pris, Reserverat, Totalt
-        message_lines = [
-            f"🍺 *Beer Kegs in Stock* ({total_kegs} types, {total_quantity} total kegs, {total_reserved} reserved)\n",
-            "```",
+        message_lines.extend([
             f"{'Finns':<5} {'Beskrivning':<14} {'ABV':<5} {'Pris':<6} {'Reserv.':<7} {'Totalt':<6}",
             "-" * 48
-        ]
+        ])
         
         for keg in sorted_kegs:
             available = f"{keg['available']}x{keg['volume']}"[:5]
@@ -243,22 +252,20 @@ def format_kegs_message(kegs: list, show_all: bool = False) -> str:
                 f"{available:<5} {name:<14} {abv:<5} {price:<6} {reserved:<7} {total:<6}"
             )
     else:
-        # 3-column layout: Finns, Beskrivning, Pris (mobile-friendly, max 31 chars)
-        message_lines = [
-            f"🍺 *Beer Kegs in Stock* ({total_kegs} types, {total_quantity} total kegs, {total_reserved} reserved)\n",
-            "```",
-            f"{'Finns':<5} {'Beskrivning':<14} {'ABV':<5} {'Pris':<4}",
-            "-" * 31
-        ]
+        # 3-column layout: Finns, Beskrivning, Pris (mobile-friendly, max 27 chars)
+        message_lines.extend([
+            f"{'Finns':<5} {'Beskrivning':<10} {'ABV':<5} {'Pris':<4}",
+            "-" * 27
+        ])
         
         for keg in sorted_kegs:
             available = f"{keg['available']}x{keg['volume']}"[:5]
-            name = f"{keg['name']}"[:14]
+            name = f"{keg['name']}"[:10]
             abv = f"{keg['abv']}"[:5]
             price = f"{int(keg['price'])}"[:4]
             
             message_lines.append(
-                f"{available:<5} {name:<14} {abv:<5} {price:<4}"
+                f"{available:<5} {name:<10} {abv:<5} {price:<4}"
             )
     
     message_lines.append("```")
