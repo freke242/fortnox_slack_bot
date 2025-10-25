@@ -350,12 +350,12 @@ def format_kegs_message(kegs: list, show_all: bool = False) -> str:
             total = f"{keg['quantity']}x{keg['volume']}"[:6]
             
             message_lines.append(
-                f"{available:<5} {name:<20} {abv:>5} {price:<7} {reserved:>7} {total:>6}"
+                f"{available:>5} {name:<20} {abv:>5} {price:>7} {reserved:>7} {total:>6}"
             )
     else:
         # 3-column layout: Finns, Namn, Pris (mobile-friendly, max 27 chars)
         message_lines.extend([
-            f"{'Finns':<5} {'Namn':<10} {'ABV':>5} {'Pris':<4}",
+            f"{'Finns':>5} {'Namn':<10} {'ABV':>5} {'Pris':>4}",
             "-" * 27
         ])
         
@@ -366,7 +366,7 @@ def format_kegs_message(kegs: list, show_all: bool = False) -> str:
             price = f"{int(keg['price'])}"[:4]
             
             message_lines.append(
-                f"{available:<5} {name:<10} {abv:>5} {price:<4}"
+                f"{available:>5} {name:<10} {abv:>5} {price:>4}"
             )
     
     message_lines.append("```")
@@ -421,12 +421,12 @@ def format_cans_message(cans: list, show_all: bool = False) -> str:
             total = f"{can['boxes']}"[:6]
             
             message_lines.append(
-                f"{available:<6} {name:<20} {abv:>5} {price:<6} {reserved:>7} {total:>6}"
+                f"{available:>6} {name:<20} {abv:>5} {price:>6} {reserved:>7} {total:>6}"
             )
     else:
         # 3-column layout: Lådor, Namn, ABV, Pris (mobile-friendly)
         message_lines.extend([
-            f"{'Lådor':>6} {'Namn':<10} {'ABV':>5} {'Pris':<4}",
+            f"{'Lådor':>6} {'Namn':<10} {'ABV':>5} {'Pris':>4}",
             "-" * 28
         ])
         
@@ -437,7 +437,7 @@ def format_cans_message(cans: list, show_all: bool = False) -> str:
             price = f"{int(can['price'])}"[:4]
             
             message_lines.append(
-                f"{available:<6} {name:<10} {abv:>5} {price:<4}"
+                f"{available:>6} {name:<10} {abv:>5} {price:>4}"
             )
     
     message_lines.append("```")
