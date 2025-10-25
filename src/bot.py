@@ -374,6 +374,78 @@ def format_kegs_message(kegs: list, show_all: bool = False) -> str:
     return "\n".join(message_lines)
 
 
+def format_cans_message(cans: list, show_all: bool = False) -> str:
+    """
+    Format beer cans list into a readable Slack message
+    
+    Args:
+        cans: List of can dictionaries with name, abv, volume, boxes, and quantity
+        show_all: If True, show 4 columns. If False, show 2 columns (default, mobile-friendly)
+        
+    Returns:
+        Formatted message string
+    """
+    if not cans:
+        return "❌ No beer cans found in stock."
+    
+    # Sort alphabetically by name
+    sorted_cans = sorted(cans, key=lambda c: c['name'])
+    
+    total_cans = len(sorted_cans)
+    total_boxes = sum(can['boxes'] for can in sorted_cans)
+    total_reserved_boxes = sum(can['reserved_boxes'] for can in sorted_cans)
+    
+    # Get current timestamp
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+    
+    # Common header for both layouts
+    message_lines = [
+        f"🥫 *Antal burkar i lager* ({total_cans} sorter, {total_boxes} kartonger totalt, {total_reserved_boxes} reserverade)",
+        f"_{current_time}_\n",
+        "```"
+    ]
+    
+    if show_all:
+        # 5-column layout: Finns, Beskrivning, ABV, Pris, Reserv., Totalt
+        message_lines.extend([
+            f"{'Finns':<6} {'Beskrivning':<14} {'ABV':<5} {'Pris':<6} {'Reserv.':<7} {'Totalt':<6}",
+            "-" * 49
+        ])
+        
+        for can in sorted_cans:
+            available = f"{can['available_boxes']}"[:6]
+            name = f"{can['name']}"[:14]
+            abv = f"{can['abv']}"[:5]
+            price = f"{int(can['price'])}"[:6]
+            reserved = f"{can['reserved_boxes']}"[:7]
+            total = f"{can['boxes']}"[:6]
+            
+            message_lines.append(
+                f"{available:<6} {name:<14} {abv:<5} {price:<6} {reserved:<7} {total:<6}"
+            )
+    else:
+        # 3-column layout: Finns, Namn, ABV, Pris (mobile-friendly)
+        message_lines.extend([
+            f"{'Finns':<6} {'Namn':<10} {'ABV':<5} {'Pris':<4}",
+            "-" * 28
+        ])
+        
+        for can in sorted_cans:
+            available = f"{can['available_boxes']}"[:6]
+            name = f"{can['name']}"[:10]
+            abv = f"{can['abv']}"[:5]
+            price = f"{int(can['price'])}"[:4]
+            
+            message_lines.append(
+                f"{available:<6} {name:<10} {abv:<5} {price:<4}"
+            )
+    
+    message_lines.append("```")
+    message_lines.append("\n_Antal i kartonger (1 kartong = 24 burkar)_")
+    
+    return "\n".join(message_lines)
+
+
 @app.command("/fat")
 def handle_fat_command(ack, command, respond):
     """
@@ -434,6 +506,99 @@ def handle_fat_detaljerat_command(ack, command, respond):
     except Exception as e:
         logger.error(f"Error handling fat-detaljerat command: {e}", exc_info=True)
         respond(f"❌ Error fetching beer kegs: {str(e)}\nPlease check your Fortnox API credentials.")
+
+
+@app.command("/burk")
+def handle_burk_command(ack, command, respond):
+    """
+    Handle the /burk slash command
+    Lists all beer cans in stock from Fortnox (2 columns, mobile-friendly)
+    
+    Usage:
+        /burk - Show beer cans (Finns, Beskrivning)
+    """
+    # Acknowledge the command request
+    ack()
+    
+    try:
+        logger.info(f"Burk command received from user {command['user_name']}")
+        
+        # Fetch cans from Fortnox
+        respond("🔄 Fetching beer cans from Fortnox...")
+        cans = fortnox_client.get_beer_cans_in_stock()
+        
+        # Format and send response (2 columns)
+        message = format_cans_message(cans, show_all=False)
+        respond(message)
+        
+    except FortnoxRateLimitError as e:
+        logger.warning(f"Rate limit hit on burk command: {e}")
+        respond("⚠️ **Fortnox API rate limit exceeded**\n\nWe've hit the maximum number of API requests. Please wait a few minutes and try again.")
+    except Exception as e:
+        logger.error(f"Error handling burk command: {e}", exc_info=True)
+        respond(f"❌ Error fetching beer cans: {str(e)}\nPlease check your Fortnox API credentials.")
+
+
+@app.command("/burk-detaljerat")
+def handle_burk_detaljerat_command(ack, command, respond):
+    """
+    Handle the /burk-detaljerat slash command
+    Lists all beer cans in stock from Fortnox with full details (4 columns)
+    
+    Usage:
+        /burk-detaljerat - Show beer cans with all columns
+    """
+    # Acknowledge the command request
+    ack()
+    
+    try:
+        logger.info(f"Burk-detaljerat command received from user {command['user_name']}")
+        
+        # Fetch cans from Fortnox
+        respond("🔄 Fetching beer cans from Fortnox...")
+        cans = fortnox_client.get_beer_cans_in_stock()
+        
+        # Format and send response (4 columns)
+        message = format_cans_message(cans, show_all=True)
+        respond(message)
+        
+    except FortnoxRateLimitError as e:
+        logger.warning(f"Rate limit hit on burk-detaljerat command: {e}")
+        respond("⚠️ **Fortnox API rate limit exceeded**\n\nWe've hit the maximum number of API requests. Please wait a few minutes and try again.")
+    except Exception as e:
+        logger.error(f"Error handling burk-detaljerat command: {e}", exc_info=True)
+        respond(f"❌ Error fetching beer cans: {str(e)}\nPlease check your Fortnox API credentials.")
+
+
+@app.command("/bot")
+def handle_bot_command(ack, command, respond):
+    """
+    Handle the /bot slash command
+    Display help information with available commands
+    """
+    # Acknowledge the command request
+    ack()
+    
+    logger.info(f"Bot help command received from user {command['user_name']}")
+    
+    help_message = """
+🤖 *Fortnox Inventory Bot - Available Commands*
+
+*Beer Kegs (Fat):*
+• `/fat` - List beer kegs in stock (simple view)
+• `/fat-detaljerat` - List beer kegs with full details (available, reserved, total)
+
+*Beer Cans (Burkar):*
+• `/burk` - List beer cans in stock (simple view)
+• `/burk-detaljerat` - List beer cans with full details (available, reserved, total)
+
+*Help:*
+• `/bot` - Show this help message
+
+_Note: Quantities for cans are shown in boxes (1 box = 24 cans)_
+"""
+    
+    respond(help_message)
 
 
 @app.event("app_mention")
