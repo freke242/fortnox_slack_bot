@@ -1,6 +1,6 @@
 # Fortnox Slack Bot
 
-A Slack bot that integrates with the Fortnox API to provide real-time inventory and warehouse information directly in Slack.
+A Slack bot for a **craft brewery** that integrates with the Fortnox API to provide real-time inventory and warehouse information directly in Slack.
 
 ## 📚 Documentation
 
@@ -14,10 +14,12 @@ A Slack bot that integrates with the Fortnox API to provide real-time inventory 
 
 ## Features
 
-- 📦 List all articles in stock with a simple slash command
-- 🔍 Search for specific articles by article number
-- 📊 Filter articles by minimum stock quantity
+- 🍺 List beer kegs in stock with HoReCa pricing
+- 🥫 List beer cans in stock (shown in boxes of 24)
+- 📊 Simple and detailed views for both kegs and cans
 - 💬 Interactive Slack interface with formatted responses
+- 🔄 Automatic OAuth token refresh every 50 minutes
+- 💾 Persistent token storage across restarts
 
 ## Prerequisites
 
@@ -78,17 +80,35 @@ pip install -r requirements.txt
 2. Click **Create New Command**
 3. Add the following commands:
 
-   **Command 1: /fortnox-stock**
-   - Command: `/fortnox-stock`
+   **Command 1: /fat**
+   - Command: `/fat`
    - Request URL: `https://your-app-url.com/slack/events` (can be anything for Socket Mode)
-   - Short Description: "List articles in stock"
-   - Usage Hint: `[minimum_quantity]`
+   - Short Description: "List beer kegs in stock"
+   - Usage Hint: (leave empty)
 
-   **Command 2: /fortnox-article**
-   - Command: `/fortnox-article`
+   **Command 2: /fat-detaljerat**
+   - Command: `/fat-detaljerat`
    - Request URL: `https://your-app-url.com/slack/events`
-   - Short Description: "Get article details by number"
-   - Usage Hint: `<article_number>`
+   - Short Description: "List beer kegs with full details"
+   - Usage Hint: (leave empty)
+
+   **Command 3: /burk**
+   - Command: `/burk`
+   - Request URL: `https://your-app-url.com/slack/events`
+   - Short Description: "List beer cans in stock"
+   - Usage Hint: (leave empty)
+
+   **Command 4: /burk-detaljerat**
+   - Command: `/burk-detaljerat`
+   - Request URL: `https://your-app-url.com/slack/events`
+   - Short Description: "List beer cans with full details"
+   - Usage Hint: (leave empty)
+
+   **Command 5: /bot**
+   - Command: `/bot`
+   - Request URL: `https://your-app-url.com/slack/events`
+   - Short Description: "Show help and available commands"
+   - Usage Hint: (leave empty)
 
 4. Click **Save**
 
@@ -175,37 +195,41 @@ You should see:
 
 ### Available Commands
 
-#### List Articles in Stock
+#### Beer Kegs (Fat)
 
 ```
-/fortnox-stock
+/fat
 ```
-
-Lists all articles that have stock available.
-
-#### Filter by Minimum Quantity
+Lists all beer kegs in stock (simple view: available quantity, name, ABV, price).
 
 ```
-/fortnox-stock 10
+/fat-detaljerat
 ```
+Lists beer kegs with full details (available, reserved, total quantities).
 
-Lists only articles with at least 10 units in stock.
-
-#### Get Article Details
-
-```
-/fortnox-article 12345
-```
-
-Retrieves detailed information about article number 12345.
-
-#### Mention the Bot
+#### Beer Cans (Burkar)
 
 ```
-@Fortnox Inventory Bot help
+/burk
 ```
+Lists all beer cans in stock (simple view, quantities shown in boxes where 1 box = 24 cans).
 
+```
+/burk-detaljerat
+```
+Lists beer cans with full details (available, reserved, total boxes).
+
+#### Help
+
+```
+/bot
+```
 Displays help information and available commands.
+
+```
+@Fortnox Inventory Bot
+```
+Mentioning the bot also displays help information.
 
 ## Project Structure
 

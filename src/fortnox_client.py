@@ -372,3 +372,91 @@ class FortnoxClient:
         
         logger.info(f"Found {len(kegs_in_stock)} beer kegs in stock")
         return kegs_in_stock
+    
+    def get_beer_cans_in_stock(self) -> List[Dict]:
+        """
+        Retrieve beer cans that are in stock
+        
+        Filters articles by Swedish naming format: öl/brk/[volume]/[name]/[ABV]
+        where 'öl' = beer, 'brk' = burk (can)
+        
+        Quantities are converted from pieces to boxes (24 cans per box)
+        
+        Returns:
+            List of can dictionaries with name, abv, volume, boxes, and quantity
+        """
+        logger.info("Fetching beer cans in stock")
+        articles = self.get_articles()
+        
+        cans_in_stock = []
+        for article in articles:
+            description = article.get("Description", "")
+            
+            # Skip if no description
+            if not description:
+                continue
+            
+            # Split description by slash
+            parts = description.split('/')
+            
+            # Check if format matches: öl/brk/volume/name/abv
+            if len(parts) >= 5 and parts[0].lower() == 'öl' and parts[1].lower() == 'brk':
+                try:
+                    # Extract volume (e.g., "0,33" for 0.33L cans)
+                    volume = parts[2]
+                    
+                    # Extract name (may contain slashes, so join remaining parts except last)
+                    name = '/'.join(parts[3:-1])
+                    
+                    # Extract ABV (last part)
+                    abv = parts[-1]
+                    
+                    # Get quantity in stock (pieces)
+                    stock_pieces = float(article.get("QuantityInStock", 0) or 0)
+                    
+                    # Get reserved quantity (pieces)
+                    try:
+                        reserved_pieces = float(article.get("ReservedQuantity", 0) or 0)
+                    except (ValueError, TypeError):
+                        reserved_pieces = 0
+                    
+                    # Calculate available quantity (stock - reserved)
+                    available_pieces = stock_pieces - reserved_pieces
+                    
+                    # Convert to boxes (24 cans per box, rounded down)
+                    stock_boxes = int(stock_pieces // 24)
+                    reserved_boxes = int(reserved_pieces // 24)
+                    available_boxes = int(available_pieces // 24)
+                    
+                    # Get price from HoReCa price list cache (loaded at startup)
+                    article_number = article.get("ArticleNumber", "")
+                    price = self.horeca_prices_cache.get(article_number, 0.0)
+                    
+                    # Fallback to SalesPrice if no price in HoReCa cache
+                    if price == 0:
+                        try:
+                            price = float(article.get("SalesPrice", 0) or 0)
+                        except (ValueError, TypeError):
+                            price = 0.0
+                    
+                    # Only include if in stock
+                    if stock_pieces > 0:
+                        cans_in_stock.append({
+                            "name": name,
+                            "abv": abv,
+                            "volume": volume,
+                            "pieces": int(stock_pieces),
+                            "boxes": stock_boxes,
+                            "reserved_pieces": int(reserved_pieces),
+                            "reserved_boxes": reserved_boxes,
+                            "available_pieces": int(available_pieces),
+                            "available_boxes": available_boxes,
+                            "price": price,
+                            "article_number": article_number
+                        })
+                except (ValueError, TypeError) as e:
+                    logger.debug(f"Skipping malformed can description: {description} - {e}")
+                    continue
+        
+        logger.info(f"Found {len(cans_in_stock)} beer cans in stock")
+        return cans_in_stock

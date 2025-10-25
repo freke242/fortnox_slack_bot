@@ -4,6 +4,27 @@ This file contains important context and commands for AI coding agents working o
 
 ---
 
+## 🍺 **IMPORTANT: Business Context**
+
+**This is a CRAFT BREWERY inventory system.**
+
+⚠️ **Critical Guidelines for AI Agents:**
+
+1. **Never use mainstream/commercial beer brands** (e.g., Carlsberg, Tuborg, Heineken) or craftwashing brands (e.g., Brutal Brewing) in examples or documentation
+2. **This brewery produces high-quality craft beer** - treat it with respect in all communications
+3. **Use appropriate craft beer examples:**
+   - Beerium (e.g., "Beerium ISWID 6.5%" / "I'll Sleep When I'm Dead")
+   - Stigbergets Bryggeri
+   - Omnipollo
+   - Or generic craft styles: "Imperial Stout 8.5%", "Hazy IPA 6.5%", "Sour Ale 4.2%"
+4. **Context matters:** This is about artisanal brewing, unique flavors, and craft beer culture
+5. **Documentation examples** should reflect the quality and craftsmanship of the products
+6. **Avoid craftwashing:** Some brands appear craft but are owned by large commercial breweries
+
+**Why this matters:** Using commercial beer brands in a craft brewery context is disrespectful to the business and the craft beer industry. Always maintain awareness of the business domain.
+
+---
+
 ## 🔧 Development Environment
 
 ### Virtual Environment

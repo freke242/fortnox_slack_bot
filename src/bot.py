@@ -374,108 +374,6 @@ def format_kegs_message(kegs: list, show_all: bool = False) -> str:
     return "\n".join(message_lines)
 
 
-@app.command("/fortnox-stock")
-def handle_stock_command(ack, command, respond):
-    """
-    Handle the /fortnox-stock slash command
-    Lists all articles in stock from Fortnox
-    
-    Usage:
-        /fortnox-stock - Show all articles (default limit: 200)
-        /fortnox-stock <minimum> - Show articles with minimum stock quantity
-        /fortnox-stock <minimum> <limit> - Set both minimum stock and display limit
-    """
-    # Acknowledge the command request
-    ack()
-    
-    try:
-        logger.info(f"Stock command received from user {command['user_name']}")
-        
-        # Parse optional parameters: minimum stock and display limit
-        text = command.get('text', '').strip()
-        minimum_stock = 0
-        display_limit = 200  # Default limit
-        
-        if text:
-            parts = text.split()
-            try:
-                if len(parts) >= 1:
-                    minimum_stock = int(parts[0])
-                    logger.info(f"Filtering by minimum stock: {minimum_stock}")
-                if len(parts) >= 2:
-                    display_limit = int(parts[1])
-                    logger.info(f"Display limit set to: {display_limit}")
-            except ValueError:
-                respond("⚠️ Invalid parameter. Usage: `/fortnox-stock [minimum_quantity] [display_limit]`")
-                return
-        
-        # Fetch articles from Fortnox
-        respond("🔄 Fetching articles from Fortnox...")
-        articles = fortnox_client.get_articles_in_stock(minimum_stock=minimum_stock)
-        
-        # Format and send response
-        message = format_articles_message(articles, limit=display_limit)
-        respond(message)
-        
-    except FortnoxRateLimitError as e:
-        logger.warning(f"Rate limit hit on stock command: {e}")
-        respond("⚠️ **Fortnox API rate limit exceeded**\n\nWe've hit the maximum number of API requests. Please wait a few minutes and try again.")
-    except Exception as e:
-        logger.error(f"Error handling stock command: {e}", exc_info=True)
-        respond(f"❌ Error fetching articles: {str(e)}\nPlease check your Fortnox API credentials.")
-
-
-@app.command("/fortnox-article")
-def handle_article_command(ack, command, respond):
-    """
-    Handle the /fortnox-article slash command
-    Get details about a specific article by article number
-    """
-    # Acknowledge the command request
-    ack()
-    
-    try:
-        article_number = command.get('text', '').strip()
-        
-        if not article_number:
-            respond("⚠️ Please provide an article number. Usage: `/fortnox-article <article_number>`")
-            return
-        
-        logger.info(f"Article lookup requested for: {article_number}")
-        
-        # Fetch article from Fortnox
-        respond(f"🔄 Looking up article {article_number}...")
-        article = fortnox_client.get_article_by_number(article_number)
-        
-        if not article:
-            respond(f"❌ Article {article_number} not found.")
-            return
-        
-        # Format article details
-        message = f"""
-📦 *Article Details*
-
-*Article Number:* {article.get('ArticleNumber', 'N/A')}
-*Description:* {article.get('Description', 'No description')}
-*Quantity in Stock:* {article.get('QuantityInStock', 0)} {article.get('Unit', 'pcs')}
-*Stock Place:* {article.get('StockPlace', 'N/A')}
-*Sales Price:* {float(article.get('SalesPrice', 0) or 0):.2f} {article.get('Currency', 'SEK')}
-*Purchase Price:* {float(article.get('PurchasePrice', 0) or 0):.2f} {article.get('Currency', 'SEK')}
-*Supplier:* {article.get('SupplierName', 'N/A')}
-*EAN:* {article.get('EAN', 'N/A')}
-*Manufacturer:* {article.get('Manufacturer', 'N/A')}
-"""
-        
-        respond(message)
-        
-    except FortnoxRateLimitError as e:
-        logger.warning(f"Rate limit hit on article command: {e}")
-        respond("⚠️ **Fortnox API rate limit exceeded**\n\nWe've hit the maximum number of API requests. Please wait a few minutes and try again.")
-    except Exception as e:
-        logger.error(f"Error handling article command: {e}", exc_info=True)
-        respond(f"❌ Error fetching article: {str(e)}\nPlease check the article number and try again.")
-
-
 @app.command("/fat")
 def handle_fat_command(ack, command, respond):
     """
@@ -553,20 +451,18 @@ def handle_app_mention(event, say):
 
 *Available Commands:*
 
-• `/fortnox-stock` - List all articles in stock (up to 200 items)
-• `/fortnox-stock <minimum>` - List articles with at least the specified quantity
-• `/fortnox-stock <minimum> <limit>` - Control minimum stock and display limit
-• `/fortnox-article <number>` - Get details about a specific article
-• `/fat` - List beer kegs in stock (mobile view)
+*Beer Kegs (Fat):*
+• `/fat` - List beer kegs in stock (simple view)
 • `/fat-detaljerat` - List beer kegs with full details
 
-*Examples:*
-`/fortnox-stock` - Show all articles in stock
-`/fortnox-stock 10` - Show articles with at least 10 units in stock
-`/fortnox-stock 0 500` - Show all articles, display up to 500 items
-`/fortnox-article 12345` - Show details for article 12345
-`/fat` - Show beer kegs (available quantity + description)
-`/fat-detaljerat` - Show beer kegs with all columns (available, reserved, total)
+*Beer Cans (Burkar):*
+• `/burk` - List beer cans in stock (simple view)
+• `/burk-detaljerat` - List beer cans with full details
+
+*Help:*
+• `/bot` - Show this help message
+
+_Note: Quantities for cans are shown in boxes (1 box = 24 cans)_
 """
     
     say(help_message)

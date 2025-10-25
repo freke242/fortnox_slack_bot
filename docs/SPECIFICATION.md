@@ -26,12 +26,14 @@
 ## Overview
 
 ### Purpose
-A Slack bot that integrates with Fortnox ERP API to provide real-time inventory and warehouse information directly in Slack workspace channels.
+A Slack bot for a **craft brewery** that integrates with Fortnox ERP API to provide real-time inventory and warehouse information directly in Slack workspace channels.
+
+**Business Context:** This system manages inventory for a craft brewery producing high-quality, artisanal beers. All examples and documentation should reflect craft beer culture and quality products.
 
 ### Core Functionality
-- List all articles in stock with filtering capabilities
-- Search for specific articles by article number
-- Display keg inventory with special pricing from HoReCa price list
+- List craft beer kegs in stock with HoReCa pricing
+- List craft beer cans in stock (displayed in boxes of 24)
+- Simple and detailed views for inventory
 - Automatic OAuth token refresh (every 50 minutes)
 - Persistent token storage across restarts/deployments
 - Rate limit handling (Fortnox: 300 requests/minute)
@@ -268,181 +270,188 @@ headers = {
 
 ## Slack Commands Specification
 
-### Command: `/fortnox-stock`
+### Command: `/fat`
 
-**Purpose:** List all articles in stock with optional filtering and display limit
-
-**Syntax:**
-```
-/fortnox-stock [minimum_quantity] [display_limit]
-```
-
-**Parameters:**
-- `minimum_quantity` (optional, default: 0) - Only show articles with stock >= this value
-- `display_limit` (optional, default: 50) - Maximum number of articles to display
-
-**Examples:**
-```
-/fortnox-stock              # Show all articles in stock (limit 50)
-/fortnox-stock 10           # Show articles with stock >= 10
-/fortnox-stock 5 100        # Show articles with stock >= 5, display up to 100
-```
-
-**Response Format (Desktop/Wide):**
-```
-📦 Articles in Stock (Minimum: 0, Showing: 10/139)
-
-Finns  Artikelnummer  Beskrivning           Pris      Reserv  Tot
------  --------------  --------------------  --------  ------  -----
-10     12345          Product Name          1,234 kr  5       15
-25     67890          Another Product       567 kr    0       25
-...
-```
-
-**Response Format (Mobile/Narrow):**
-```
-📦 Articles in Stock (10/139)
-
-Finns  Namn           ABV    Pris
------  -------------  -----  ------
-10     Product A      5.0%   1,234
-25     Product B      4.5%   567
-...
-```
-
-**Mobile Detection:**
-- Desktop: Lines > 70 characters
-- Mobile: Lines <= 70 characters
-
-**Implementation:**
-```python
-@app.command("/fortnox-stock")
-def handle_stock_command(ack, command, respond):
-    ack()  # Acknowledge immediately
-    
-    # Parse parameters
-    text = command.get('text', '').strip()
-    parts = text.split()
-    minimum_stock = int(parts[0]) if len(parts) >= 1 else 0
-    display_limit = int(parts[1]) if len(parts) >= 2 else 50
-    
-    # Fetch and respond
-    articles = fortnox_client.get_articles_in_stock(minimum_stock)
-    message = format_articles_message(articles, limit=display_limit)
-    respond(message)
-```
-
----
-
-### Command: `/fortnox-article`
-
-**Purpose:** Get detailed information about a specific article by article number
+**Purpose:** List beer kegs in stock (simple mobile-friendly view)
 
 **Syntax:**
 ```
-/fortnox-article <article_number>
-```
-
-**Parameters:**
-- `article_number` (required) - The Fortnox article number
-
-**Examples:**
-```
-/fortnox-article 12345
-/fortnox-article ABC-001
-```
-
-**Response Format:**
-```
-📦 Article: 12345
-
-**Description:** Product Name Here
-**Available Stock:** 25
-**Reserved:** 5
-**Total:** 30
-**Price:** 1,234 kr
-**Unit:** st (pieces)
-**Supplier:** Supplier Name AB
-```
-
-**Error Cases:**
-```
-❌ Article 99999 not found
-⚠️ Please provide an article number. Usage: `/fortnox-article <article_number>`
-```
-
-**Implementation:**
-```python
-@app.command("/fortnox-article")
-def handle_article_command(ack, command, respond):
-    ack()
-    
-    article_number = command.get('text', '').strip()
-    
-    if not article_number:
-        respond("⚠️ Please provide an article number...")
-        return
-    
-    article = fortnox_client.get_article_by_number(article_number)
-    
-    if not article:
-        respond(f"❌ Article {article_number} not found")
-        return
-    
-    message = format_article_details(article)
-    respond(message)
-```
-
----
-
-### Command: `/fortnox-kegs`
-
-**Purpose:** Display beer kegs in stock with prices from HoReCa price list
-
-**Syntax:**
-```
-/fortnox-kegs
+/fat
 ```
 
 **Parameters:** None
 
 **Response Format:**
 ```
-🍺 Beer Kegs in Stock (8)
+🍺 Antal fat i lager (8 sorter, 45 fat totalt, 5 reserverade)
+2025-10-25 18:30
 
-Finns  Namn                   ABV    HoReCa Pris  Total
------  ---------------------  -----  -----------  -----
-10     Carlsberg 30L          5.0%   1,850 kr     15
-5      Tuborg 50L             4.6%   2,400 kr     8
+Finns  Namn           ABV    Pris
+-----  -------------  -----  ----
+10x30  Beerium ISWID  6.5%   1950
+5x50   Omnipollo      7.2%   2800
 ...
 ```
 
-**Price Logic:**
-1. Find "HoReCa" price list (case-insensitive search)
-2. Look up article in price list B (HoReCa)
-3. If found in price list, use that price
-4. Else fallback to article.SalesPrice
-5. Cache price list ID for performance
-
 **Implementation:**
 ```python
-@app.command("/fortnox-kegs")
-def handle_kegs_command(ack, command, respond):
+@app.command("/fat")
+def handle_fat_command(ack, command, respond):
     ack()
-    
-    # Get all articles
-    all_articles = fortnox_client.get_articles()
-    
-    # Filter for kegs (Description contains "Fustage" or similar)
-    kegs = [a for a in all_articles if is_keg(a)]
-    
-    # Filter in stock
-    kegs_in_stock = [k for k in kegs if k.get('QuantityInStock', 0) > 0]
-    
-    message = format_kegs_message(kegs_in_stock)
+    kegs = fortnox_client.get_beer_kegs_in_stock()
+    message = format_kegs_message(kegs, show_all=False)
     respond(message)
 ```
 
+---
+
+### Command: `/fat-detaljerat`
+
+**Purpose:** List beer kegs in stock with full details
+
+**Syntax:**
+```
+/fat-detaljerat
+```
+
+**Parameters:** None
+
+**Response Format:**
+```
+🍺 Antal fat i lager (8 sorter, 45 fat totalt, 5 reserverade)
+2025-10-25 18:30
+
+Finns  Beskrivning    ABV    Pris   Reserv.  Totalt
+-----  -------------  -----  -----  -------  ------
+10x30  Beerium ISWID  6.5%   1950   2x30     12x30
+5x50   Stigbergets    5.8%   2400   0x50     5x50
+...
+```
+
+**Implementation:**
+```python
+@app.command("/fat-detaljerat")
+def handle_fat_detaljerat_command(ack, command, respond):
+    ack()
+    kegs = fortnox_client.get_beer_kegs_in_stock()
+    message = format_kegs_message(kegs, show_all=True)
+    respond(message)
+```
+
+---
+
+### Command: `/burk`
+
+**Purpose:** List beer cans in stock (simple mobile-friendly view)
+
+**Syntax:**
+```
+/burk
+```
+
+**Parameters:** None
+
+**Response Format:**
+```
+🥫 Antal burkar i lager (12 sorter, 35 kartonger totalt, 3 reserverade)
+2025-10-25 18:30
+
+Finns   Namn            ABV    Pris
+------  --------------  -----  ----
+15     Omnipollo Noa   6.5%   520
+8      Stigbergets     5.2%   480
+...
+
+Antal i kartonger (1 kartong = 24 burkar)
+```
+
+**Note:** Quantities shown in boxes (1 box = 24 cans), rounded down
+
+**Implementation:**
+```python
+@app.command("/burk")
+def handle_burk_command(ack, command, respond):
+    ack()
+    cans = fortnox_client.get_beer_cans_in_stock()
+    message = format_cans_message(cans, show_all=False)
+    respond(message)
+```
+
+---
+
+### Command: `/burk-detaljerat`
+
+**Purpose:** List beer cans in stock with full details
+
+**Syntax:**
+```
+/burk-detaljerat
+```
+
+**Parameters:** None
+
+**Response Format:**
+```
+🥫 Antal burkar i lager (12 sorter, 35 kartonger totalt, 3 reserverade)
+2025-10-25 18:30
+
+Finns   Beskrivning    ABV    Pris   Reserv.  Totalt
+------  --------------  -----  -----  -------  ------
+15     Omnipollo Noa  6.5%   520    1        16
+8      Stigbergets    5.2%   480    0        8
+...
+
+Antal i kartonger (1 kartong = 24 burkar)
+```
+
+**Implementation:**
+```python
+@app.command("/burk-detaljerat")
+def handle_burk_detaljerat_command(ack, command, respond):
+    ack()
+    cans = fortnox_client.get_beer_cans_in_stock()
+    message = format_cans_message(cans, show_all=True)
+    respond(message)
+```
+
+---
+
+### Command: `/bot`
+
+**Purpose:** Display help information with available commands
+
+**Syntax:**
+```
+/bot
+```
+
+**Parameters:** None
+
+**Response Format:**
+```
+🤖 Fortnox Inventory Bot - Available Commands
+
+Beer Kegs (Fat):
+• /fat - List beer kegs in stock (simple view)
+• /fat-detaljerat - List beer kegs with full details
+
+Beer Cans (Burkar):
+• /burk - List beer cans in stock (simple view)
+• /burk-detaljerat - List beer cans with full details
+
+Help:
+• /bot - Show this help message
+
+Note: Quantities for cans are shown in boxes (1 box = 24 cans)
+```
+
+**Implementation:**
+```python
+@app.command("/bot")
+def handle_bot_command(ack, command, respond):
+    ack()
+    respond(help_message)
+```
 
 ---
 
