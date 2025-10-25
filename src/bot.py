@@ -337,20 +337,20 @@ def format_kegs_message(kegs: list, show_all: bool = False) -> str:
     if show_all:
         # 5-column layout: Finns, Namn, ABV, Pris, Reserv., Totalt
         message_lines.extend([
-            f"{'Finns':<5} {'Namn':<20} {'ABV':>5} {'Pris':<6} {'Reserv.':>7} {'Totalt':>6}",
-            "-" * 54
+            f"{'Finns':>5} {'Namn':<20} {'ABV':>5} {'Pris':>7} {'Reserv.':>7} {'Totalt':>6}",
+            "-" * 55
         ])
         
         for keg in sorted_kegs:
             available = f"{keg['available']}x{keg['volume']}"[:5]
             name = f"{keg['name']}"[:20]
             abv = f"{keg['abv']}"[:5]
-            price = f"{int(keg['price'])}"[:6]
+            price = f"{int(keg['price'])} kr"[:7]
             reserved = f"{keg['reserved']}x{keg['volume']}"[:7]
             total = f"{keg['quantity']}x{keg['volume']}"[:6]
             
             message_lines.append(
-                f"{available:<5} {name:<20} {abv:>5} {price:<6} {reserved:>7} {total:>6}"
+                f"{available:<5} {name:<20} {abv:>5} {price:<7} {reserved:>7} {total:>6}"
             )
     else:
         # 3-column layout: Finns, Namn, Pris (mobile-friendly, max 27 chars)
@@ -408,7 +408,7 @@ def format_cans_message(cans: list, show_all: bool = False) -> str:
     if show_all:
         # 5-column layout: Lådor, Namn, ABV, Pris, Reserv., Totalt
         message_lines.extend([
-            f"{'Lådor':<6} {'Namn':<20} {'ABV':>5} {'Pris':<6} {'Reserv.':>7} {'Totalt':>6}",
+            f"{'Lådor':>6} {'Namn':<20} {'ABV':>5} {'Pris':>6} {'Reserv.':>7} {'Totalt':>6}",
             "-" * 55
         ])
         
@@ -416,7 +416,7 @@ def format_cans_message(cans: list, show_all: bool = False) -> str:
             available = f"{can['available_boxes']}"[:6]
             name = f"{can['name']}"[:20]
             abv = f"{can['abv']}"[:5]
-            price = f"{int(can['price'])}"[:6]
+            price = f"{int(can['price'])} kr"[:6]
             reserved = f"{can['reserved_boxes']}"[:7]
             total = f"{can['boxes']}"[:6]
             
@@ -426,7 +426,7 @@ def format_cans_message(cans: list, show_all: bool = False) -> str:
     else:
         # 3-column layout: Lådor, Namn, ABV, Pris (mobile-friendly)
         message_lines.extend([
-            f"{'Lådor':<6} {'Namn':<10} {'ABV':>5} {'Pris':<4}",
+            f"{'Lådor':>6} {'Namn':<10} {'ABV':>5} {'Pris':<4}",
             "-" * 28
         ])
         
