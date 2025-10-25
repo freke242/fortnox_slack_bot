@@ -60,11 +60,31 @@ fortnox_slack_bot/
 ├── get_fortnox_token.py        # OAuth token generator
 ├── refresh_token.py            # Standalone token refresh script
 ├── test_fortnox.py             # API connection test script
+├── Dockerfile                  # Railway deployment configuration
 ├── requirements.txt            # Python dependencies
 ├── .env                        # Environment variables (not in git)
 ├── .env.example               # Environment template
 ├── fortnox_tokens.json         # Persistent token storage (not in git, auto-created)
 └── venv/                       # Virtual environment (not in git)
+```
+
+### 🚂 Railway Deployment
+
+This project uses **Dockerfile** for Railway deployment. 
+
+**⚠️ IMPORTANT**: If you add new Python files that are needed at runtime:
+- Update the `COPY *.py .` line in `Dockerfile` if files are in subdirectories
+- Or add specific `COPY` commands for new files
+- Railway only includes files explicitly copied in the Dockerfile
+
+**Example**: When `token_manager.py` was added, the Dockerfile needed updating from:
+```dockerfile
+COPY app.py .
+COPY fortnox_client.py .
+```
+to:
+```dockerfile
+COPY *.py .
 ```
 
 ---
