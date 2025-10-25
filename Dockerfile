@@ -16,13 +16,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY *.py .
 COPY *.md .
 
-# Create non-root user and prepare data directory for Railway volume
-RUN useradd -m -u 1000 botuser && \
-    mkdir -p /data && \
-    chown -R botuser:botuser /app /data
-
-# Switch to non-root user
-USER botuser
+# Note: Running as root for Railway volume compatibility
+# Railway volumes are mounted with root ownership
+# For local/other deployments, consider using a non-root user
 
 # Run the application
 CMD ["python", "app.py"]
