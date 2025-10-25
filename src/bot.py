@@ -12,8 +12,8 @@ from datetime import datetime
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 from dotenv import load_dotenv
-from fortnox_client import FortnoxClient, FortnoxRateLimitError
-from token_manager import TokenManager
+from src.fortnox_client import FortnoxClient, FortnoxRateLimitError
+from src.token_manager import TokenManager
 
 # Load environment variables
 load_dotenv()
@@ -329,9 +329,9 @@ def format_kegs_message(kegs: list, show_all: bool = False) -> str:
                 f"{available:<5} {name:<14} {abv:<5} {price:<6} {reserved:<7} {total:<6}"
             )
     else:
-        # 3-column layout: Finns, Beskrivning, Pris (mobile-friendly, max 27 chars)
+        # 3-column layout: Finns, Namn, Pris (mobile-friendly, max 27 chars)
         message_lines.extend([
-            f"{'Finns':<5} {'Beskrivning':<10} {'ABV':<5} {'Pris':<4}",
+            f"{'Finns':<5} {'Namn':<10} {'ABV':<5} {'Pris':<4}",
             "-" * 27
         ])
         

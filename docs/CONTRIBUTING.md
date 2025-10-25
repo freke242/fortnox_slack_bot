@@ -56,7 +56,7 @@ Enhancement suggestions are welcome! Please include:
    python test_fortnox.py
    
    # Run the bot locally
-   python app.py
+   python -m src.bot
    ```
 
 5. **Commit your changes**
@@ -204,7 +204,7 @@ logger.error("Error messages for failures")
 
 2. **Run the bot**
    ```bash
-   python app.py
+   python -m src.bot
    ```
 
 3. **Test in Slack**

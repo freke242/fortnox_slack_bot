@@ -45,7 +45,7 @@ After setting up the volume, you need fresh tokens:
 
 **Option A: From local machine**
 ```bash
-./venv/bin/python get_fortnox_token.py
+./venv/bin/python scripts/get_fortnox_token.py
 ```
 
 Then copy the tokens from `fortnox_tokens.json` to Railway environment variables:
@@ -55,7 +55,7 @@ Then copy the tokens from `fortnox_tokens.json` to Railway environment variables
 **Option B: Use Railway console**
 ```bash
 # In Railway service console
-python get_fortnox_token.py
+python scripts/get_fortnox_token.py
 ```
 
 Note: This won't work on Railway because it requires a browser for OAuth.
@@ -96,11 +96,28 @@ This means environment variables act as a **backup recovery mechanism** - keep t
 
 Check Railway logs for:
 ```
+🚀 Starting Fortnox Slack Bot...
+Running as root, setting up secure environment...
+✅ Created botuser (uid 1000)
+✅ Fixed /app permissions
+📁 Railway volume detected at: /data
+✅ Fixed volume permissions
+🔒 Dropping to non-root user (botuser)...
 ✅ Using Railway volume for tokens: /data/fortnox_tokens.json
 ✅ Tokens loaded from file
 ```
 
 If you see "Initializing token file from environment variables" on EVERY deploy, the volume isn't working.
+
+### Security
+
+The bot uses a **secure startup process**:
+1. Container starts as root
+2. `entrypoint.sh` fixes volume permissions
+3. Drops to non-root user (`botuser`)
+4. Bot runs as `botuser` (not root)
+
+This gives you **both** security and volume access! ✅
 
 ## Without Volume (Current Situation)
 

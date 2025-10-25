@@ -118,7 +118,7 @@ screen -S fortnox-bot
 
 # Activate virtual environment and run
 source venv/bin/activate
-python app.py
+python -m src.bot
 
 # Detach: Press Ctrl+A, then D
 
@@ -137,7 +137,7 @@ tmux new -s fortnox-bot
 
 # Activate virtual environment and run
 source venv/bin/activate
-python app.py
+python -m src.bot
 
 # Detach: Press Ctrl+B, then D
 
@@ -154,7 +154,7 @@ tmux kill-session -t fortnox-bot
 
 1. **Create `Procfile`:**
    ```
-   worker: python app.py
+   worker: python -m src.bot
    ```
 
 2. **Deploy:**

@@ -34,7 +34,7 @@ I've implemented **persistent token storage** that survives restarts and properl
    - Saves **both** access and refresh tokens on every refresh
    - Auto-migrates from env vars to file on first run
 
-2. **`get_fortnox_token.py`**:
+2. **`scripts/get_fortnox_token.py`**:
    - Now saves tokens to both `.env` and `fortnox_tokens.json`
 
 3. **`.gitignore`**:
@@ -87,7 +87,7 @@ If you want to be extra safe, get fresh tokens first:
 
 ```bash
 # Generate new tokens locally
-./venv/bin/python get_fortnox_token.py
+./venv/bin/python scripts/get_fortnox_token.py
 
 # Update Railway environment variables with new tokens
 # (Go to Railway dashboard → Variables)
@@ -131,12 +131,12 @@ You can test the fix locally before deploying:
 
 ```bash
 # Make sure you have fresh tokens
-./venv/bin/python get_fortnox_token.py
+./venv/bin/python scripts/get_fortnox_token.py
 
 # This creates fortnox_tokens.json in your project directory
 
 # Run the bot
-./venv/bin/python app.py
+./venv/bin/python -m src.bot
 
 # Watch for the token file being created/updated
 ls -la fortnox_tokens.json
@@ -148,7 +148,7 @@ cat fortnox_tokens.json
 ## Migration Notes
 
 - **Existing deployments**: The bot will auto-create `fortnox_tokens.json` from Railway env vars on first run
-- **Local development**: Run `get_fortnox_token.py` to create the token file
+- **Local development**: Run `scripts/get_fortnox_token.py` to create the token file
 - **Backwards compatible**: Bot still reads from env vars if token file doesn't exist
 
 ## Security

@@ -34,8 +34,8 @@ if [ "$(id -u)" = "0" ]; then
     echo "🔒 ENTRYPOINT: Dropping to non-root user (botuser)..." >&2
     echo "========================================" >&2
     # Use su to switch to botuser and run the app
-    exec su -s /bin/sh botuser -c "cd /app && exec python app.py"
+    exec su -s /bin/sh botuser -c "cd /app && exec python -m src.bot"
 else
     echo "ENTRYPOINT: Already running as non-root user" >&2
-    exec python /app/app.py
+    exec python -m src.bot
 fi

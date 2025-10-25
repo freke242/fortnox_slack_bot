@@ -45,7 +45,7 @@ FORTNOX_CLIENT_SECRET=your-client-secret
 Railway will automatically:
 - Detect Python project
 - Install dependencies from `requirements.txt`
-- Run `python app.py` (from Procfile)
+- Run `python -m src.bot` (from Procfile)
 
 ### 5. Verify Deployment
 
@@ -109,7 +109,7 @@ Without volume:
 **This should no longer happen with the new token file system!**
 
 If you still see this:
-1. Run `./venv/bin/python get_fortnox_token.py` locally to get fresh tokens
+1. Run `./venv/bin/python scripts/get_fortnox_token.py` locally to get fresh tokens
 2. Update FORTNOX_REFRESH_TOKEN in Railway environment variables
 3. Redeploy (Railway will recreate `fortnox_tokens.json` from env vars)
 4. Check logs for "Checking token storage..." and "Tokens loaded from file"

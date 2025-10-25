@@ -24,7 +24,7 @@ cp .env.example .env
 nano .env  # Add FORTNOX_CLIENT_ID and FORTNOX_CLIENT_SECRET
 
 # 2. Run the automated script
-python get_fortnox_token.py
+python scripts/get_fortnox_token.py
 ```
 
 The script will:
@@ -292,7 +292,7 @@ Before running the bot in production:
 Your bot is now configured with a Fortnox service account. Start the bot:
 
 ```bash
-python app.py
+python -m src.bot
 ```
 
 And test it in Slack:

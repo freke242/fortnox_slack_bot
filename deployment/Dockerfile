@@ -12,10 +12,11 @@ ENV PYTHONUNBUFFERED=1 \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application files
-COPY *.py .
-COPY *.md .
-COPY entrypoint.sh .
+# Copy application source code
+COPY src/ ./src/
+
+# Copy deployment entrypoint
+COPY deployment/entrypoint.sh .
 
 # Make entrypoint executable
 RUN chmod +x entrypoint.sh

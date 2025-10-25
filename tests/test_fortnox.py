@@ -1,10 +1,20 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 """
 Test script for Fortnox API connection
 Run this to verify your Fortnox credentials are working
 """
 import os
+import sys
+from pathlib import Path
+
+# Add parent directory to path so we can import from src
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from dotenv import load_dotenv
-from fortnox_client import FortnoxClient, FortnoxRateLimitError
+from src.fortnox_client import FortnoxClient, FortnoxRateLimitError
 
 def test_fortnox_connection():
     """Test the Fortnox API connection and credentials"""

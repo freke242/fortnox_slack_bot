@@ -4,11 +4,13 @@ A Slack bot that integrates with the Fortnox API to provide real-time inventory 
 
 ## 📚 Documentation
 
-- **[QUICKSTART.md](QUICKSTART.md)** - Get started in 10 minutes ⚡
-- **[FORTNOX_SETUP.md](FORTNOX_SETUP.md)** - Detailed Fortnox service account setup
-- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Production deployment guide
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** - How to contribute
-- **[CHANGELOG.md](CHANGELOG.md)** - Version history
+- **[QUICKSTART.md](docs/QUICKSTART.md)** - Get started in 10 minutes ⚡
+- **[FORTNOX_SETUP.md](docs/FORTNOX_SETUP.md)** - Detailed Fortnox service account setup
+- **[RAILWAY_DEPLOYMENT.md](docs/RAILWAY_DEPLOYMENT.md)** - Deploy to Railway (recommended)
+- **[DEPLOYMENT.md](docs/DEPLOYMENT.md)** - General deployment guide
+- **[CONTRIBUTING.md](docs/CONTRIBUTING.md)** - How to contribute
+- **[CHANGELOG.md](docs/CHANGELOG.md)** - Version history
+- **[AGENTS.md](docs/AGENTS.md)** - AI agent context & development notes
 
 ## Features
 
@@ -135,6 +137,25 @@ Service accounts:
    FORTNOX_CLIENT_SECRET=your-fortnox-client-secret-here
    ```
 
+## Project Structure
+
+```
+fortnox_slack_bot/
+├── src/                    # Source code
+│   ├── bot.py             # Main bot application
+│   ├── fortnox_client.py  # Fortnox API client
+│   └── token_manager.py   # Token persistence
+├── tests/                  # Test files
+├── scripts/                # Utility scripts
+│   ├── get_fortnox_token.py
+│   └── setup.sh
+├── docs/                   # Documentation
+├── deployment/             # Docker & deployment config
+│   ├── Dockerfile
+│   └── entrypoint.sh
+└── requirements.txt        # Dependencies
+```
+
 ## Usage
 
 ### Starting the Bot
@@ -144,7 +165,7 @@ Service accounts:
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Run the bot
-python app.py
+python -m src.bot
 ```
 
 You should see:

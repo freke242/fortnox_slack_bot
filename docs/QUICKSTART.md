@@ -105,7 +105,7 @@ FORTNOX_CLIENT_SECRET=your-client-secret-here
 
 ```bash
 source venv/bin/activate
-python get_fortnox_token.py
+python scripts/get_fortnox_token.py
 ```
 
 **What happens:**
@@ -129,7 +129,7 @@ You should see your articles listed.
 ### 4.2 Start the Bot
 
 ```bash
-python app.py
+python -m src.bot
 ```
 
 You should see:
@@ -209,7 +209,7 @@ This usually means:
 - Redirect URI doesn't match
 - Authorization code already used or expired
 
-Solution: Regenerate Client Secret and run `python get_fortnox_token.py` again
+Solution: Regenerate Client Secret and run `python scripts/get_fortnox_token.py` again
 
 ---
 

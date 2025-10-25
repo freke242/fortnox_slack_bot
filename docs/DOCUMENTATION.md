@@ -109,7 +109,7 @@ fortnox_slack_bot/
 
 | Script | Purpose | Documentation |
 |--------|---------|---------------|
-| `get_fortnox_token.py` | Automated OAuth token retrieval | See FORTNOX_SETUP.md |
+| `scripts/get_fortnox_token.py` | Automated OAuth token retrieval | See FORTNOX_SETUP.md |
 | `refresh_token.py` | Auto-refresh access tokens | See FORTNOX_SETUP.md |
 | `test_fortnox.py` | Test Fortnox API connection | See QUICKSTART.md |
 | `validate_config.py` | Validate environment variables | See README.md |

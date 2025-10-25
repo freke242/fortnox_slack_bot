@@ -24,7 +24,11 @@ from urllib.parse import urlparse, parse_qs, urlencode
 import requests
 from dotenv import load_dotenv, set_key
 from pathlib import Path
-from token_manager import TokenManager
+
+# Add parent directory to path so we can import from src
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from src.token_manager import TokenManager
 
 # Configuration
 REDIRECT_URI = "http://localhost:33140/callback"

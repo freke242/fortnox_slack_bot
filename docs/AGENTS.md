@@ -43,7 +43,7 @@ To test the Fortnox API integration:
 ### Run the Bot
 To start the Slack bot:
 ```bash
-./venv/bin/python app.py
+./venv/bin/python -m src.bot
 ```
 
 The bot must be running for Slack commands to work.
@@ -54,13 +54,27 @@ The bot must be running for Slack commands to work.
 
 ```
 fortnox_slack_bot/
-├── app.py                      # Main Slack bot application
-├── fortnox_client.py           # Fortnox API client (with pagination)
-├── token_manager.py            # Token persistence handler (NEW)
-├── get_fortnox_token.py        # OAuth token generator
-├── refresh_token.py            # Standalone token refresh script
-├── test_fortnox.py             # API connection test script
-├── Dockerfile                  # Railway deployment configuration
+├── src/                        # Source code package
+│   ├── bot.py                 # Main Slack bot application
+│   ├── fortnox_client.py      # Fortnox API client (with pagination)
+│   └── token_manager.py       # Token persistence handler
+├── tests/                      # Test suite
+│   ├── test_fortnox.py        # API connection test
+│   ├── test_horeca_lookup.py  # HoReCa price list test
+│   └── test_*.py              # Other tests
+├── scripts/                    # Utility scripts
+│   ├── get_fortnox_token.py   # OAuth token generator
+│   ├── refresh_token.py       # Manual token refresh
+│   └── setup.sh               # Initial setup script
+├── docs/                       # Documentation
+│   ├── QUICKSTART.md          # Getting started guide
+│   ├── FORTNOX_SETUP.md       # Fortnox API setup
+│   ├── RAILWAY_DEPLOYMENT.md  # Railway deployment
+│   └── *.md                   # Other documentation
+├── deployment/                 # Deployment configuration
+│   ├── Dockerfile             # Docker configuration
+│   ├── entrypoint.sh          # Container entrypoint
+│   └── docker-compose.yml     # Local Docker setup
 ├── requirements.txt            # Python dependencies
 ├── .env                        # Environment variables (not in git)
 ├── .env.example               # Environment template
@@ -105,7 +119,7 @@ The bot uses a persistent token file (`fortnox_tokens.json`) to handle OAuth tok
 **Important files**:
 - `token_manager.py` - Handles reading/writing tokens with thread-safe locking
 - `fortnox_tokens.json` - Stores current access_token and refresh_token (created automatically)
-- `get_fortnox_token.py` - Generates initial tokens via OAuth flow
+- `scripts/get_fortnox_token.py` - Generates initial tokens via OAuth flow
 
 ### Fortnox API Pagination
 The `fortnox_client.py` implements automatic pagination:
@@ -135,7 +149,7 @@ The `fortnox_client.py` implements automatic pagination:
 **Cause**: Refresh token rotation - Fortnox issued a new refresh token that wasn't saved
 **Solution**: 
 1. Token file system now handles this automatically (as of 2025-10-25)
-2. If you see this error, regenerate tokens: `./venv/bin/python get_fortnox_token.py`
+2. If you see this error, regenerate tokens: `./venv/bin/python scripts/get_fortnox_token.py`
 3. Restart the bot - it will create `fortnox_tokens.json` automatically
 4. On Railway: Make sure environment variables are set (used for initial migration only)
 
@@ -158,7 +172,7 @@ The `fortnox_client.py` implements automatic pagination:
 
 ### Bot not responding in Slack
 **Solution**:
-1. Check bot is running: `./venv/bin/python app.py`
+1. Check bot is running: `./venv/bin/python -m src.bot`
 2. Verify Socket Mode is enabled in Slack App settings
 3. Check `.env` file has all required tokens
 

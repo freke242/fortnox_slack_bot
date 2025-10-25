@@ -1,3 +1,7 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 #!/usr/bin/env python3
 """
 Test script to discover and map Fortnox price lists.
@@ -8,7 +12,7 @@ Expected price lists: A, B, C with names Systembolaget, HoReCa, Kranen
 import os
 import logging
 from dotenv import load_dotenv
-from fortnox_client import FortnoxClient, FortnoxRateLimitError
+from src.fortnox_client import FortnoxClient, FortnoxRateLimitError
 
 # Configure logging
 logging.basicConfig(
