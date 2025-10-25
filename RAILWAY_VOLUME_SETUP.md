@@ -31,15 +31,13 @@ In Railway dashboard:
 5. Mount path: `/data`
 6. Save
 
-### Step 3: Set Environment Variable
+### Step 3: Verify Volume Mount
 
-Add to your Railway environment variables:
+Railway **automatically sets** `RAILWAY_VOLUME_MOUNT_PATH=/data` when you mount the volume.
 
-```
-RAILWAY_VOLUME_MOUNT_PATH=/data
-```
+You can verify it in **Variables** tab - you should see it listed (you didn't create it manually).
 
-The bot will automatically use this path for storing tokens.
+The bot will automatically detect this variable and use `/data/fortnox_tokens.json` for storage.
 
 ### Step 4: Initialize with Fresh Tokens
 

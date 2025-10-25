@@ -16,9 +16,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY *.py .
 COPY *.md .
 
-# Create non-root user
+# Create non-root user and prepare data directory for Railway volume
 RUN useradd -m -u 1000 botuser && \
-    chown -R botuser:botuser /app
+    mkdir -p /data && \
+    chown -R botuser:botuser /app /data
 
 # Switch to non-root user
 USER botuser
