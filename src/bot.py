@@ -337,7 +337,7 @@ def format_kegs_message(kegs: list, show_all: bool = False) -> str:
     if show_all:
         # 5-column layout: Finns, Namn, ABV, Pris, Reserv., Totalt
         message_lines.extend([
-            f"{'Finns':<5} {'Namn':<20} {'ABV':<5} {'Pris':<6} {'Reserv.':<7} {'Totalt':<6}",
+            f"{'Finns':<5} {'Namn':<20} {'ABV':>5} {'Pris':<6} {'Reserv.':>7} {'Totalt':>6}",
             "-" * 54
         ])
         
@@ -350,12 +350,12 @@ def format_kegs_message(kegs: list, show_all: bool = False) -> str:
             total = f"{keg['quantity']}x{keg['volume']}"[:6]
             
             message_lines.append(
-                f"{available:<5} {name:<20} {abv:<5} {price:<6} {reserved:<7} {total:<6}"
+                f"{available:<5} {name:<20} {abv:>5} {price:<6} {reserved:>7} {total:>6}"
             )
     else:
         # 3-column layout: Finns, Namn, Pris (mobile-friendly, max 27 chars)
         message_lines.extend([
-            f"{'Finns':<5} {'Namn':<10} {'ABV':<5} {'Pris':<4}",
+            f"{'Finns':<5} {'Namn':<10} {'ABV':>5} {'Pris':<4}",
             "-" * 27
         ])
         
@@ -366,7 +366,7 @@ def format_kegs_message(kegs: list, show_all: bool = False) -> str:
             price = f"{int(keg['price'])}"[:4]
             
             message_lines.append(
-                f"{available:<5} {name:<10} {abv:<5} {price:<4}"
+                f"{available:<5} {name:<10} {abv:>5} {price:<4}"
             )
     
     message_lines.append("```")
@@ -406,9 +406,9 @@ def format_cans_message(cans: list, show_all: bool = False) -> str:
     ]
     
     if show_all:
-        # 5-column layout: Finns, Namn, ABV, Pris, Reserv., Totalt
+        # 5-column layout: Lådor, Namn, ABV, Pris, Reserv., Totalt
         message_lines.extend([
-            f"{'Finns':<6} {'Namn':<20} {'ABV':<5} {'Pris':<6} {'Reserv.':<7} {'Totalt':<6}",
+            f"{'Lådor':<6} {'Namn':<20} {'ABV':>5} {'Pris':<6} {'Reserv.':>7} {'Totalt':>6}",
             "-" * 55
         ])
         
@@ -421,12 +421,12 @@ def format_cans_message(cans: list, show_all: bool = False) -> str:
             total = f"{can['boxes']}"[:6]
             
             message_lines.append(
-                f"{available:<6} {name:<20} {abv:<5} {price:<6} {reserved:<7} {total:<6}"
+                f"{available:<6} {name:<20} {abv:>5} {price:<6} {reserved:>7} {total:>6}"
             )
     else:
-        # 3-column layout: Finns, Namn, ABV, Pris (mobile-friendly)
+        # 3-column layout: Lådor, Namn, ABV, Pris (mobile-friendly)
         message_lines.extend([
-            f"{'Finns':<6} {'Namn':<10} {'ABV':<5} {'Pris':<4}",
+            f"{'Lådor':<6} {'Namn':<10} {'ABV':>5} {'Pris':<4}",
             "-" * 28
         ])
         
@@ -437,11 +437,10 @@ def format_cans_message(cans: list, show_all: bool = False) -> str:
             price = f"{int(can['price'])}"[:4]
             
             message_lines.append(
-                f"{available:<6} {name:<10} {abv:<5} {price:<4}"
+                f"{available:<6} {name:<10} {abv:>5} {price:<4}"
             )
     
     message_lines.append("```")
-    message_lines.append("\n_Antal i kartonger (1 kartong = 24 burkar)_")
     
     return "\n".join(message_lines)
 
@@ -582,20 +581,18 @@ def handle_bot_command(ack, command, respond):
     logger.info(f"Bot help command received from user {command['user_name']}")
     
     help_message = """
-🤖 *Fortnox Inventory Bot - Available Commands*
+🤖 *Fortnox Lagersystem - Tillgängliga Kommandon*
 
-*Beer Kegs (Fat):*
-• `/fat` - List beer kegs in stock (simple view)
-• `/fat-detaljerat` - List beer kegs with full details (available, reserved, total)
+*Ölfat:*
+• `/fat` - Lista fat i lager (enkel vy)
+• `/fat-detaljerat` - Lista fat med fullständig information (tillgängligt, reserverat, totalt)
 
-*Beer Cans (Burkar):*
-• `/burk` - List beer cans in stock (simple view)
-• `/burk-detaljerat` - List beer cans with full details (available, reserved, total)
+*Ölburkar:*
+• `/burk` - Lista burkar i lager (enkel vy)
+• `/burk-detaljerat` - Lista burkar med fullständig information (tillgängligt, reserverat, totalt)
 
-*Help:*
-• `/bot` - Show this help message
-
-_Note: Quantities for cans are shown in boxes (1 box = 24 cans)_
+*Hjälp:*
+• `/bot` - Visa detta hjälpmeddelande
 """
     
     respond(help_message)
@@ -612,22 +609,20 @@ def handle_app_mention(event, say):
     logger.info(f"Bot mentioned by user {user}: {text}")
     
     help_message = f"""
-👋 Hi <@{user}>! I'm the Fortnox Inventory Bot.
+👋 Hej <@{user}>! Jag är Fortnox Lagersystemet.
 
-*Available Commands:*
+*Tillgängliga Kommandon:*
 
-*Beer Kegs (Fat):*
-• `/fat` - List beer kegs in stock (simple view)
-• `/fat-detaljerat` - List beer kegs with full details
+*Ölfat:*
+• `/fat` - Lista fat i lager (enkel vy)
+• `/fat-detaljerat` - Lista fat med fullständig information
 
-*Beer Cans (Burkar):*
-• `/burk` - List beer cans in stock (simple view)
-• `/burk-detaljerat` - List beer cans with full details
+*Ölburkar:*
+• `/burk` - Lista burkar i lager (enkel vy)
+• `/burk-detaljerat` - Lista burkar med fullständig information
 
-*Help:*
-• `/bot` - Show this help message
-
-_Note: Quantities for cans are shown in boxes (1 box = 24 cans)_
+*Hjälp:*
+• `/bot` - Visa detta hjälpmeddelande
 """
     
     say(help_message)
