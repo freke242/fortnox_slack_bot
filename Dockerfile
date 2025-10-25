@@ -15,10 +15,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application files
 COPY *.py .
 COPY *.md .
+COPY entrypoint.sh .
 
-# Note: Running as root for Railway volume compatibility
-# Railway volumes are mounted with root ownership
-# For local/other deployments, consider using a non-root user
+# Make entrypoint executable
+RUN chmod +x entrypoint.sh
 
-# Run the application
-CMD ["python", "app.py"]
+# Security: Start as root to fix volume permissions, then drop to non-root user
+# The entrypoint script handles permission fixes and user switching
+ENTRYPOINT ["/app/entrypoint.sh"]
