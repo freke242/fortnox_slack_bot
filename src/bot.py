@@ -3,6 +3,7 @@ Fortnox Slack Bot
 A Slack bot that integrates with Fortnox API to provide inventory information
 """
 import os
+import sys
 import logging
 import requests
 import base64
@@ -18,10 +19,33 @@ from src.token_manager import TokenManager
 # Load environment variables
 load_dotenv()
 
-# Configure logging
+# Configure logging with split streams for Railway
+# INFO/DEBUG → stdout (blue), ERROR/WARNING/CRITICAL → stderr (red)
+
+class StdoutFilter(logging.Filter):
+    """Only allow INFO and DEBUG to stdout"""
+    def filter(self, record):
+        return record.levelno < logging.WARNING
+
+class StderrFilter(logging.Filter):
+    """Only allow WARNING, ERROR, and CRITICAL to stderr"""
+    def filter(self, record):
+        return record.levelno >= logging.WARNING
+
+# Create handlers
+stdout_handler = logging.StreamHandler(sys.stdout)
+stdout_handler.setLevel(logging.DEBUG)
+stdout_handler.addFilter(StdoutFilter())
+
+stderr_handler = logging.StreamHandler(sys.stderr)
+stderr_handler.setLevel(logging.WARNING)
+stderr_handler.addFilter(StderrFilter())
+
+# Configure root logger
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[stdout_handler, stderr_handler]
 )
 logger = logging.getLogger(__name__)
 

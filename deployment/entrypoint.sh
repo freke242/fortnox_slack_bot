@@ -4,14 +4,14 @@ set -e
 # Railway Volume Permission Fix + Security
 # This script runs as root, fixes volume permissions, then drops to non-root user
 
-echo "========================================" >&2
-echo "🚀 ENTRYPOINT: Starting Fortnox Slack Bot..." >&2
-echo "   Current user: $(whoami) (uid=$(id -u))" >&2
-echo "========================================" >&2
+echo "========================================"
+echo "🚀 ENTRYPOINT: Starting Fortnox Slack Bot..."
+echo "   Current user: $(whoami) (uid=$(id -u))"
+echo "========================================"
 
 # Check if we're running as root
 if [ "$(id -u)" = "0" ]; then
-    echo "ENTRYPOINT: Running as root, setting up secure environment..." >&2
+    echo "ENTRYPOINT: Running as root, setting up secure environment..."
     
     # Create botuser if it doesn't exist
     if ! id -u botuser > /dev/null 2>&1; then
@@ -25,17 +25,17 @@ if [ "$(id -u)" = "0" ]; then
     
     # Fix Railway volume permissions if volume is mounted
     if [ -n "$RAILWAY_VOLUME_MOUNT_PATH" ] && [ -d "$RAILWAY_VOLUME_MOUNT_PATH" ]; then
-        echo "📁 ENTRYPOINT: Railway volume detected at: $RAILWAY_VOLUME_MOUNT_PATH" >&2
+        echo "📁 ENTRYPOINT: Railway volume detected at: $RAILWAY_VOLUME_MOUNT_PATH"
         chown -R botuser:botuser "$RAILWAY_VOLUME_MOUNT_PATH"
-        echo "✅ ENTRYPOINT: Fixed volume permissions" >&2
+        echo "✅ ENTRYPOINT: Fixed volume permissions"
     fi
     
-    echo "========================================" >&2
-    echo "🔒 ENTRYPOINT: Dropping to non-root user (botuser)..." >&2
-    echo "========================================" >&2
+    echo "========================================"
+    echo "🔒 ENTRYPOINT: Dropping to non-root user (botuser)..."
+    echo "========================================"
     # Use su to switch to botuser and run the app
     exec su -s /bin/sh botuser -c "cd /app && exec python -m src.bot"
 else
-    echo "ENTRYPOINT: Already running as non-root user" >&2
+    echo "ENTRYPOINT: Already running as non-root user"
     exec python -m src.bot
 fi
