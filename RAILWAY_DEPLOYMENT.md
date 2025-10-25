@@ -63,10 +63,22 @@ Refreshing Fortnox access token...
 ## Features on Railway
 
 ✅ **Auto-refresh token**: Runs every 50 minutes automatically
+✅ **Token rotation handling**: NEW - Bot saves refresh tokens to file (fixes invalid_grant error)
 ✅ **Always-on bot**: No server to manage
 ✅ **Auto-restart**: If bot crashes, Railway restarts it
 ✅ **Logs**: View all bot activity in Railway dashboard
 ✅ **Free tier**: Includes 500 hours/month (enough for 24/7 operation)
+
+## Token Management (NEW - 2025-10-25)
+
+The bot now uses persistent file storage for tokens (`fortnox_tokens.json`) to handle Fortnox's token rotation:
+
+- **First deploy**: Bot auto-creates `fortnox_tokens.json` from environment variables
+- **Token rotation**: When Fortnox issues new refresh tokens, they're saved to the file
+- **Survives restarts**: Railway persists the token file across deployments
+- **No manual updates**: You no longer need to update Railway env vars when tokens refresh
+
+**This fixes the "invalid_grant" error that previously stopped the bot after ~50 minutes.**
 
 ## Troubleshooting
 
@@ -75,10 +87,14 @@ Refreshing Fortnox access token...
 - Verify all environment variables are set
 - Make sure SLACK_APP_TOKEN is correct (Socket Mode)
 
-### Token refresh fails
-- Run `python get_fortnox_token.py` locally to get fresh tokens
-- Update FORTNOX_REFRESH_TOKEN in Railway variables
-- Redeploy
+### Token refresh fails (invalid_grant error)
+**This should no longer happen with the new token file system!**
+
+If you still see this:
+1. Run `./venv/bin/python get_fortnox_token.py` locally to get fresh tokens
+2. Update FORTNOX_REFRESH_TOKEN in Railway environment variables
+3. Redeploy (Railway will recreate `fortnox_tokens.json` from env vars)
+4. Check logs for "Checking token storage..." and "Tokens loaded from file"
 
 ### Rate limit errors
 - Bot automatically handles rate limits

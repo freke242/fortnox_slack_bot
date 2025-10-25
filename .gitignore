@@ -1,6 +1,10 @@
 # Environment variables
 .env
 
+# Token storage (contains OAuth tokens)
+fortnox_tokens.json
+fortnox_tokens.tmp
+
 # Python
 __pycache__/
 *.py[cod]

@@ -12,6 +12,7 @@ from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 from dotenv import load_dotenv
 from fortnox_client import FortnoxClient, FortnoxRateLimitError
+from token_manager import TokenManager
 
 # Load environment variables
 load_dotenv()
@@ -32,12 +33,14 @@ app = App(
 # Global variable for Fortnox client (will be initialized after token refresh)
 fortnox_client = None
 current_access_token = None
+token_manager = TokenManager()  # Manages persistent token storage
 
 
 def refresh_fortnox_token():
     """
     Refresh the Fortnox access token using the refresh token.
     Updates the global fortnox_client with the new token.
+    Also saves the new refresh token if Fortnox issues one (token rotation).
     
     Returns:
         bool: True if successful, False otherwise
@@ -46,16 +49,19 @@ def refresh_fortnox_token():
     
     logger.info("Refreshing Fortnox access token...")
     
+    # Get refresh token from token manager (persistent storage)
+    refresh_token = token_manager.get_refresh_token()
+    
     # Get credentials from environment
-    refresh_token = os.environ.get("FORTNOX_REFRESH_TOKEN")
     client_id = os.environ.get("FORTNOX_CLIENT_ID")
     client_secret = os.environ.get("FORTNOX_CLIENT_SECRET")
     
     # Validate required variables
     if not all([refresh_token, client_id, client_secret]):
-        logger.error("Missing required environment variables for token refresh")
+        logger.error("Missing required credentials for token refresh")
         if not refresh_token:
-            logger.error("  - FORTNOX_REFRESH_TOKEN not set")
+            logger.error("  - FORTNOX_REFRESH_TOKEN not found in token file")
+            logger.error("    Run: ./venv/bin/python get_fortnox_token.py")
         if not client_id:
             logger.error("  - FORTNOX_CLIENT_ID not set")
         if not client_secret:
@@ -85,10 +91,21 @@ def refresh_fortnox_token():
         if response.status_code == 200:
             data = response.json()
             new_access_token = data.get("access_token")
+            new_refresh_token = data.get("refresh_token")  # May be rotated by Fortnox
             
             if not new_access_token:
                 logger.error("No access token in response")
                 return False
+            
+            # CRITICAL: Save the new refresh token if Fortnox issued one
+            # This is the fix for the "invalid_grant" error - tokens must be persisted
+            if new_refresh_token:
+                if new_refresh_token != refresh_token:
+                    logger.info("🔄 Fortnox issued a new refresh token (rotation)")
+                token_manager.save_tokens(new_access_token, new_refresh_token)
+            else:
+                # No new refresh token, just update access token
+                token_manager.save_tokens(new_access_token, refresh_token)
             
             # Update in-memory access token
             current_access_token = new_access_token
@@ -476,6 +493,13 @@ if __name__ == "__main__":
             logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")
             logger.error("Please check your .env file")
             exit(1)
+        
+        # Initialize token file from environment variables if it doesn't exist
+        # This migrates from env-based tokens to file-based tokens
+        logger.info("Checking token storage...")
+        if not token_manager.initialize_from_env():
+            logger.warning("⚠️  Could not initialize token file from environment")
+            logger.warning("    Attempting to use existing token file...")
         
         # Refresh Fortnox token at startup
         logger.info("Initializing Fortnox connection...")

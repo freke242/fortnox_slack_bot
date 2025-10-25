@@ -56,16 +56,33 @@ The bot must be running for Slack commands to work.
 fortnox_slack_bot/
 ├── app.py                      # Main Slack bot application
 ├── fortnox_client.py           # Fortnox API client (with pagination)
+├── token_manager.py            # Token persistence handler (NEW)
+├── get_fortnox_token.py        # OAuth token generator
+├── refresh_token.py            # Standalone token refresh script
 ├── test_fortnox.py             # API connection test script
 ├── requirements.txt            # Python dependencies
 ├── .env                        # Environment variables (not in git)
 ├── .env.example               # Environment template
+├── fortnox_tokens.json         # Persistent token storage (not in git, auto-created)
 └── venv/                       # Virtual environment (not in git)
 ```
 
 ---
 
 ## 🔑 Key Implementation Details
+
+### Token Management
+The bot uses a persistent token file (`fortnox_tokens.json`) to handle OAuth token rotation:
+- **Token rotation**: Fortnox issues new refresh tokens when you refresh access tokens
+- **Persistence**: Tokens are stored in `fortnox_tokens.json` (survives restarts)
+- **Auto-refresh**: Background thread refreshes tokens every 50 minutes
+- **Migration**: On first run, tokens are migrated from environment variables to file
+- **Railway deployment**: Token file persists across deployments (not in .gitignore for Railway)
+
+**Important files**:
+- `token_manager.py` - Handles reading/writing tokens with thread-safe locking
+- `fortnox_tokens.json` - Stores current access_token and refresh_token (created automatically)
+- `get_fortnox_token.py` - Generates initial tokens via OAuth flow
 
 ### Fortnox API Pagination
 The `fortnox_client.py` implements automatic pagination:
@@ -90,6 +107,14 @@ The `fortnox_client.py` implements automatic pagination:
 ---
 
 ## 🐛 Common Issues
+
+### "invalid_grant" or "Invalid refresh token" error
+**Cause**: Refresh token rotation - Fortnox issued a new refresh token that wasn't saved
+**Solution**: 
+1. Token file system now handles this automatically (as of 2025-10-25)
+2. If you see this error, regenerate tokens: `./venv/bin/python get_fortnox_token.py`
+3. Restart the bot - it will create `fortnox_tokens.json` automatically
+4. On Railway: Make sure environment variables are set (used for initial migration only)
 
 ### "Command 'python' not found"
 **Solution**: Use `./venv/bin/python` instead of `python`
@@ -137,6 +162,15 @@ The `fortnox_client.py` implements automatic pagination:
 
 ## 🚀 Recent Changes
 
+### 2025-10-25: Token Rotation Fix (Critical)
+- **Fixed refresh token rotation bug**: Bot now properly handles Fortnox token rotation
+  - Fortnox issues NEW refresh tokens when refreshing (OAuth best practice)
+  - Previous code only saved access token, causing old refresh token to become invalid
+  - Now uses persistent file storage (`fortnox_tokens.json`) that survives restarts
+  - Both access AND refresh tokens are saved on every refresh
+  - **Migration**: Token file auto-initializes from environment variables on first run
+  - This fixes the "invalid_grant" error that stopped the bot after ~50 minutes
+
 ### 2025-10-24: Rate Limit Protection & Price Lists
 - **Rate limit handling**: Added `FortnoxRateLimitError` exception
   - All Slack commands now stop immediately on rate limit (HTTP 429)
@@ -179,4 +213,4 @@ The `fortnox_client.py` implements automatic pagination:
 
 ---
 
-**Last Updated**: 2025-10-24
+**Last Updated**: 2025-10-25

@@ -24,6 +24,7 @@ from urllib.parse import urlparse, parse_qs, urlencode
 import requests
 from dotenv import load_dotenv, set_key
 from pathlib import Path
+from token_manager import TokenManager
 
 # Configuration
 REDIRECT_URI = "http://localhost:33140/callback"
@@ -193,7 +194,7 @@ def exchange_code_for_tokens(code: str, client_id: str, client_secret: str) -> d
 
 def save_tokens_to_env(access_token: str, refresh_token: str):
     """
-    Save tokens to .env file
+    Save tokens to .env file AND token file (fortnox_tokens.json)
     
     Args:
         access_token: Fortnox access token
@@ -201,15 +202,28 @@ def save_tokens_to_env(access_token: str, refresh_token: str):
     """
     env_file = Path('.env')
     
-    print("\n💾 Saving tokens to .env file...")
+    print("\n💾 Saving tokens...")
     
+    # Save to .env file (for backwards compatibility and initial setup)
     try:
         set_key(env_file, 'FORTNOX_ACCESS_TOKEN', access_token)
         set_key(env_file, 'FORTNOX_REFRESH_TOKEN', refresh_token)
-        print("✅ Tokens saved successfully")
-        return True
+        print("✅ Tokens saved to .env file")
     except Exception as e:
-        print(f"❌ Failed to save tokens: {e}")
+        print(f"⚠️  Failed to save to .env: {e}")
+        # Don't fail - token file is more important
+    
+    # Save to token file (primary storage for persistent tokens)
+    try:
+        token_manager = TokenManager()
+        if token_manager.save_tokens(access_token, refresh_token):
+            print("✅ Tokens saved to fortnox_tokens.json")
+            return True
+        else:
+            print("⚠️  Failed to save to token file")
+            return False
+    except Exception as e:
+        print(f"❌ Failed to save tokens to file: {e}")
         return False
 
 
