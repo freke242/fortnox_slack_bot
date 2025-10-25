@@ -335,22 +335,22 @@ def format_kegs_message(kegs: list, show_all: bool = False) -> str:
     ]
     
     if show_all:
-        # 5-column layout: Finns, Beskrivning, Pris, Reserverat, Totalt
+        # 5-column layout: Finns, Namn, ABV, Pris, Reserv., Totalt
         message_lines.extend([
-            f"{'Finns':<5} {'Beskrivning':<14} {'ABV':<5} {'Pris':<6} {'Reserv.':<7} {'Totalt':<6}",
-            "-" * 48
+            f"{'Finns':<5} {'Namn':<20} {'ABV':<5} {'Pris':<6} {'Reserv.':<7} {'Totalt':<6}",
+            "-" * 54
         ])
         
         for keg in sorted_kegs:
             available = f"{keg['available']}x{keg['volume']}"[:5]
-            name = f"{keg['name']}"[:14]
+            name = f"{keg['name']}"[:20]
             abv = f"{keg['abv']}"[:5]
             price = f"{int(keg['price'])}"[:6]
             reserved = f"{keg['reserved']}x{keg['volume']}"[:7]
             total = f"{keg['quantity']}x{keg['volume']}"[:6]
             
             message_lines.append(
-                f"{available:<5} {name:<14} {abv:<5} {price:<6} {reserved:<7} {total:<6}"
+                f"{available:<5} {name:<20} {abv:<5} {price:<6} {reserved:<7} {total:<6}"
             )
     else:
         # 3-column layout: Finns, Namn, Pris (mobile-friendly, max 27 chars)
@@ -406,22 +406,22 @@ def format_cans_message(cans: list, show_all: bool = False) -> str:
     ]
     
     if show_all:
-        # 5-column layout: Finns, Beskrivning, ABV, Pris, Reserv., Totalt
+        # 5-column layout: Finns, Namn, ABV, Pris, Reserv., Totalt
         message_lines.extend([
-            f"{'Finns':<6} {'Beskrivning':<14} {'ABV':<5} {'Pris':<6} {'Reserv.':<7} {'Totalt':<6}",
-            "-" * 49
+            f"{'Finns':<6} {'Namn':<20} {'ABV':<5} {'Pris':<6} {'Reserv.':<7} {'Totalt':<6}",
+            "-" * 55
         ])
         
         for can in sorted_cans:
             available = f"{can['available_boxes']}"[:6]
-            name = f"{can['name']}"[:14]
+            name = f"{can['name']}"[:20]
             abv = f"{can['abv']}"[:5]
             price = f"{int(can['price'])}"[:6]
             reserved = f"{can['reserved_boxes']}"[:7]
             total = f"{can['boxes']}"[:6]
             
             message_lines.append(
-                f"{available:<6} {name:<14} {abv:<5} {price:<6} {reserved:<7} {total:<6}"
+                f"{available:<6} {name:<20} {abv:<5} {price:<6} {reserved:<7} {total:<6}"
             )
     else:
         # 3-column layout: Finns, Namn, ABV, Pris (mobile-friendly)
