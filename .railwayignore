@@ -6,9 +6,8 @@ __pycache__/
 *.pyc
 .git/
 .gitignore
-test_*.py
+tests/
 *.md
-!RAILWAY_DEPLOYMENT.md
-debug_curl_command.sh
+!docs/RAILWAY_DEPLOYMENT.md
 .vscode/
 .idea/
