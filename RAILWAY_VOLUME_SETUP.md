@@ -75,6 +75,23 @@ Initializing token file from environment variables...
 2. **Token refresh (50 min)**: New tokens saved to `/data/fortnox_tokens.json`
 3. **Redeploy**: Volume persists → Bot loads existing tokens → No reinitialization needed! ✅
 
+### Automatic Recovery (NEW)
+
+The bot now has a **fallback mechanism** for resilience:
+
+1. **Primary**: Try to refresh using token from `/data/fortnox_tokens.json`
+2. **Fallback**: If file token is expired/invalid, automatically try environment variable
+3. **Recovery**: If fallback succeeds, save new tokens to file
+
+**Scenario**: Volume token expires (shouldn't happen, but just in case):
+```
+⚠️  Token from file is expired, trying environment variable fallback...
+✅ Successfully refreshed using environment variable fallback
+💾 Saved refreshed tokens to file
+```
+
+This means environment variables act as a **backup recovery mechanism** - keep them updated!
+
 ## Verification
 
 Check Railway logs for:

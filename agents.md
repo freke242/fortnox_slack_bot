@@ -97,7 +97,10 @@ The bot uses a persistent token file (`fortnox_tokens.json`) to handle OAuth tok
 - **Persistence**: Tokens are stored in `fortnox_tokens.json` (survives restarts)
 - **Auto-refresh**: Background thread refreshes tokens every 50 minutes
 - **Migration**: On first run, tokens are migrated from environment variables to file
-- **Railway deployment**: Token file persists across deployments (not in .gitignore for Railway)
+- **Railway deployment**: Uses Railway volume for persistence across deployments
+- **Fallback mechanism**: If file token expires, automatically falls back to environment variables and updates file
+
+**Resilience**: Environment variables serve as backup - if the token file becomes invalid, the bot automatically recovers using env vars and updates the file.
 
 **Important files**:
 - `token_manager.py` - Handles reading/writing tokens with thread-safe locking

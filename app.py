@@ -43,6 +43,8 @@ def refresh_fortnox_token():
     Updates the global fortnox_client with the new token.
     Also saves the new refresh token if Fortnox issues one (token rotation).
     
+    Fallback behavior: If token from file is expired, tries environment variables.
+    
     Returns:
         bool: True if successful, False otherwise
     """
@@ -52,22 +54,33 @@ def refresh_fortnox_token():
     
     # Get refresh token from token manager (persistent storage)
     refresh_token = token_manager.get_refresh_token()
+    token_source = "file"
     
     # Get credentials from environment
     client_id = os.environ.get("FORTNOX_CLIENT_ID")
     client_secret = os.environ.get("FORTNOX_CLIENT_SECRET")
+    env_refresh_token = os.environ.get("FORTNOX_REFRESH_TOKEN")
     
-    # Validate required variables
-    if not all([refresh_token, client_id, client_secret]):
+    # Validate we have at least one refresh token source
+    if not refresh_token and not env_refresh_token:
         logger.error("Missing required credentials for token refresh")
-        if not refresh_token:
-            logger.error("  - FORTNOX_REFRESH_TOKEN not found in token file")
-            logger.error("    Run: ./venv/bin/python get_fortnox_token.py")
+        logger.error("  - No FORTNOX_REFRESH_TOKEN in file or environment variables")
+        logger.error("    Run: ./venv/bin/python get_fortnox_token.py")
+        return False
+    
+    if not client_id or not client_secret:
+        logger.error("Missing required credentials for token refresh")
         if not client_id:
             logger.error("  - FORTNOX_CLIENT_ID not set")
         if not client_secret:
             logger.error("  - FORTNOX_CLIENT_SECRET not set")
         return False
+    
+    # Use file token if available, otherwise fall back to env
+    if not refresh_token:
+        logger.warning("⚠️  No token in file, using environment variable")
+        refresh_token = env_refresh_token
+        token_source = "environment"
     
     # Create Basic Auth credentials
     credentials = f"{client_id}:{client_secret}"
@@ -131,6 +144,70 @@ def refresh_fortnox_token():
             
             return True
         else:
+            # Check if this is an expired token error and we have a fallback
+            if response.status_code == 400 and env_refresh_token and token_source == "file":
+                response_data = response.json() if response.text else {}
+                if response_data.get("error") == "invalid_grant":
+                    logger.warning("⚠️  Token from file is expired, trying environment variable fallback...")
+                    # Retry with environment variable token
+                    try:
+                        fallback_response = requests.post(
+                            "https://apps.fortnox.se/oauth-v1/token",
+                            data={
+                                "grant_type": "refresh_token",
+                                "refresh_token": env_refresh_token
+                            },
+                            headers={
+                                "Content-Type": "application/x-www-form-urlencoded",
+                                "Authorization": f"Basic {encoded_credentials}"
+                            },
+                            timeout=10
+                        )
+                        
+                        if fallback_response.status_code == 200:
+                            logger.info("✅ Successfully refreshed using environment variable fallback")
+                            data = fallback_response.json()
+                            new_access_token = data.get("access_token")
+                            new_refresh_token = data.get("refresh_token")
+                            
+                            if not new_access_token:
+                                logger.error("No access token in fallback response")
+                                return False
+                            
+                            # Save tokens to file for future use
+                            if new_refresh_token:
+                                token_manager.save_tokens(new_access_token, new_refresh_token)
+                                logger.info("💾 Saved refreshed tokens to file")
+                            else:
+                                token_manager.save_tokens(new_access_token, env_refresh_token)
+                            
+                            # Update in-memory token
+                            current_access_token = new_access_token
+                            
+                            # Reinitialize Fortnox client
+                            fortnox_client = FortnoxClient(
+                                access_token=current_access_token,
+                                client_secret=client_secret
+                            )
+                            
+                            # Initialize price lists
+                            try:
+                                fortnox_client.initialize_price_lists()
+                            except Exception as e:
+                                logger.warning(f"⚠️  Could not initialize price lists: {e}")
+                                logger.warning("Bot will use SalesPrice as fallback for kegs")
+                            
+                            logger.info("✅ Access token refreshed successfully (via fallback)")
+                            logger.info(f"   New token: {new_access_token[:10]}...")
+                            logger.info(f"   Expires in: {data.get('expires_in', 3600)} seconds")
+                            
+                            return True
+                        else:
+                            logger.error(f"❌ Fallback also failed: HTTP {fallback_response.status_code}")
+                            logger.error(f"   Response: {fallback_response.text}")
+                    except Exception as fallback_error:
+                        logger.error(f"❌ Fallback attempt failed: {fallback_error}")
+            
             logger.error(f"❌ Failed to refresh token: HTTP {response.status_code}")
             logger.error(f"   Response: {response.text}")
             return False
