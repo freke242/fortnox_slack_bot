@@ -120,15 +120,51 @@ class TokenManager:
     
     def load_tokens(self) -> Optional[Dict[str, str]]:
         """
-        Load tokens from storage
+        Load tokens from storage with fallback chain
+        
+        Priority order:
+        1. Database (if configured)
+        2. JSON file (fallback)
+        3. Environment variables (final fallback)
         
         Returns:
             dict with 'access_token' and 'refresh_token' keys, or None if not found
         """
+        # Try database first if configured
         if USE_DATABASE:
-            return self._read_from_db()
+            tokens = self._read_from_db()
+            if tokens:
+                return tokens
+            
+            # Database configured but no tokens found - try file fallback
+            logger.info("Database has no tokens, trying file fallback...")
+            tokens = self._read_from_file()
+            if tokens:
+                return tokens
         else:
-            return self._read_from_file()
+            # No database configured, use file
+            tokens = self._read_from_file()
+            if tokens:
+                return tokens
+        
+        # Final fallback: try environment variables
+        logger.info("No tokens in storage, trying environment variables fallback...")
+        return self._read_from_env()
+    
+    def _read_from_env(self) -> Optional[Dict[str, str]]:
+        """Read tokens from environment variables (final fallback)"""
+        access_token = os.getenv('FORTNOX_ACCESS_TOKEN')
+        refresh_token = os.getenv('FORTNOX_REFRESH_TOKEN')
+        
+        if access_token and refresh_token:
+            logger.info("✅ Tokens read from environment variables")
+            return {
+                'access_token': access_token,
+                'refresh_token': refresh_token
+            }
+        else:
+            logger.warning("No tokens found in environment variables")
+            return None
     
     def _read_from_db(self) -> Optional[Dict[str, str]]:
         """Read tokens from PostgreSQL database"""
