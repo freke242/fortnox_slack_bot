@@ -1,13 +1,16 @@
 #!/bin/bash
-# Sync Fortnox tokens from Railway production database to local file
+# Sync Fortnox tokens from Railway production volume to local file
 #
-# This script pulls the latest tokens from production database via Railway CLI
-# and stores them locally in fortnox_tokens.json for development.
+# This script fetches fortnox_tokens.json from the production Railway volume
+# (persisted across deploys) and saves it locally for development.
+#
+# Setup (ONE TIME):
+# 1. In Railway dashboard → Production service → Settings
+# 2. Add a Volume: Mount path = /data
+# 3. Redeploy production (tokens will be saved to volume after next refresh)
 #
 # Prerequisites:
-# - Railway CLI installed: https://docs.railway.app/develop/cli
-# - Logged in: railway login
-# - Linked to project: railway link
+# - Railway CLI installed and linked
 
 set -e
 
@@ -15,7 +18,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 TOKEN_FILE="${PROJECT_ROOT}/fortnox_tokens.json"
 
-echo "🔄 Syncing Fortnox tokens from Railway production..."
+echo "🔄 Syncing Fortnox tokens from Railway production volume..."
 echo ""
 
 # Check if Railway CLI is installed
@@ -30,62 +33,44 @@ if ! command -v railway &> /dev/null; then
     exit 1
 fi
 
-# Run command via Railway CLI to fetch tokens from production database
-railway run --service production python3 << 'EOF'
-import sys
-import json
+# Fetch tokens from Railway volume
+TOKENS_JSON=$(railway run --service production cat /data/fortnox_tokens.json 2>/tmp/railway_err)
 
-# Add src to path so we can import TokenManager
-sys.path.insert(0, '/app/src')
-
-try:
-    from token_manager import TokenManager
-    
-    tm = TokenManager()
-    tokens = tm.load_tokens()
-    
-    if tokens:
-        # Output as JSON to stdout
-        print(json.dumps(tokens, indent=2))
-    else:
-        print("ERROR: No tokens found in database", file=sys.stderr)
-        sys.exit(1)
-        
-except Exception as e:
-    print(f"ERROR: {e}", file=sys.stderr)
-    sys.exit(1)
-EOF
-
-# Capture the output
-if [ $? -eq 0 ]; then
-    # Save the last command output to file
-    railway run --service production python3 << 'EOF' > "$TOKEN_FILE"
-import sys
-import json
-sys.path.insert(0, '/app/src')
-from token_manager import TokenManager
-tm = TokenManager()
-tokens = tm.load_tokens()
-if tokens:
-    print(json.dumps(tokens, indent=2))
-else:
-    sys.exit(1)
-EOF
-    
-    if [ $? -eq 0 ]; then
-        echo ""
-        echo "✅ Token sync complete!"
-        echo "   Saved to: ${TOKEN_FILE}"
-        echo "   You can now run the bot locally with fresh tokens"
-    else
-        echo ""
-        echo "❌ Token sync failed"
-        exit 1
-    fi
-else
+if [ $? -ne 0 ]; then
+    echo "❌ Failed to fetch tokens from Railway volume"
     echo ""
-    echo "❌ Failed to connect to Railway production"
-    echo "   Make sure you're logged in: railway login"
-    echo "   And linked to project: railway link"
+    if [ -f /tmp/railway_err ]; then
+        cat /tmp/railway_err
+        rm -f /tmp/railway_err
+    fi
+    echo ""
+    echo "Make sure:"
+    echo "  1. Railway volume is added to production (/data mount path)"
+    echo "  2. Production has run at least once to save tokens"
+    echo "  3. You're logged in: railway login && railway link"
     exit 1
 fi
+rm -f /tmp/railway_err
+
+if [ -z "$TOKENS_JSON" ]; then
+    echo "❌ Token file is empty on production volume"
+    echo "   Wait for production to refresh tokens, then try again"
+    exit 1
+fi
+
+# Validate JSON
+REFRESH_TOKEN=$(echo "$TOKENS_JSON" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('refresh_token',''))" 2>/dev/null)
+
+if [ -z "$REFRESH_TOKEN" ]; then
+    echo "❌ Invalid token format from production"
+    exit 1
+fi
+
+# Save to local file
+echo "$TOKENS_JSON" > "$TOKEN_FILE"
+
+echo "✅ Token sync complete!"
+echo "   Saved to: ${TOKEN_FILE}"
+echo "   Refresh token ends with: ...${REFRESH_TOKEN: -3}"
+echo "   You can now run the bot locally with fresh tokens"
+

@@ -254,6 +254,11 @@ class TokenManager:
                     """, (access_token, refresh_token))
             
             logger.info("✅ Tokens written to database successfully")
+            
+            # Also write to file if volume is available (for sync script)
+            if os.environ.get("RAILWAY_VOLUME_MOUNT_PATH"):
+                self._write_to_file(access_token, refresh_token)
+            
             return True
         except Exception as e:
             logger.error(f"Failed to write tokens to database: {e}")

@@ -199,10 +199,10 @@ def refresh_fortnox_token():
                                 logger.error("No access token in fallback response")
                                 return False
                             
-                            # Save tokens to file for future use
+                            # Save tokens to storage for future use
                             if new_refresh_token:
                                 token_manager.save_tokens(new_access_token, new_refresh_token)
-                                logger.info("💾 Saved refreshed tokens to file")
+                                logger.info("💾 Saved refreshed tokens to storage")
                             else:
                                 token_manager.save_tokens(new_access_token, env_refresh_token)
                             
