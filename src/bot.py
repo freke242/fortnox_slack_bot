@@ -255,55 +255,6 @@ def token_refresh_scheduler():
         logger.info("⏰ Scheduled token refresh triggered (includes price cache refresh)")
         refresh_fortnox_token()
 
-
-def format_articles_message(articles: list, limit: int = 200) -> str:
-    """
-    Format articles list into a readable Slack message
-    
-    Args:
-        articles: List of article dictionaries
-        limit: Maximum number of articles to display
-        
-    Returns:
-        Formatted message string
-    """
-    if not articles:
-        return "❌ No articles found in stock."
-    
-    total_articles = len(articles)
-    display_articles = articles[:limit]
-    
-    message_lines = [
-        f"📦 *Articles in Stock* ({total_articles} total)\n",
-        "```",
-        f"{'Article #':<15} {'Description':<40} {'Quantity':<10} {'Unit':<8} {'Price':<10}",
-        "-" * 90
-    ]
-    
-    for article in display_articles:
-        article_num = str(article.get('ArticleNumber', 'N/A'))[:14]
-        description = str(article.get('Description', 'No description'))[:39]
-        quantity = str(article.get('QuantityInStock', 0))
-        unit = str(article.get('Unit', 'pcs'))[:7]
-        # Convert SalesPrice to float (Fortnox returns it as string)
-        try:
-            price_value = float(article.get('SalesPrice', 0))
-            price = f"{price_value:.2f}"
-        except (ValueError, TypeError):
-            price = "0.00"
-        
-        message_lines.append(
-            f"{article_num:<15} {description:<40} {quantity:<10} {unit:<8} {price:<10}"
-        )
-    
-    message_lines.append("```")
-    
-    if total_articles > limit:
-        message_lines.append(f"\n_Showing {limit} of {total_articles} articles_")
-    
-    return "\n".join(message_lines)
-
-
 def format_kegs_message(kegs: list, show_all: bool = False) -> str:
     """
     Format beer kegs list into a readable Slack message
@@ -338,36 +289,37 @@ def format_kegs_message(kegs: list, show_all: bool = False) -> str:
     if show_all:
         # 5-column layout: Finns, Namn, ABV, Pris, Reserv., Totalt
         message_lines.extend([
-            f"{'Finns':>5} {'Namn':<20} {'ABV':>5} {'Pris':>7} {'Reserv.':>7} {'Totalt':>6}",
-            "-" * 55
+            f"{'Namn':<20} {'ABV':>5} {'Pris':<7} {'Totalt':<6} {'Reserv.':<7} {'Tillg.':<6}",
+            "-" * 56
         ])
         
         for keg in sorted_kegs:
-            available = f"{keg['available']}x{keg['volume']}"[:5]
+            
             name = f"{keg['name']}"[:20]
             abv = f"{keg['abv']}"[:5]
             price = f"{int(keg['price'])} kr"[:7]
-            reserved = f"{keg['reserved']}x{keg['volume']}"[:7]
             total = f"{keg['quantity']}x{keg['volume']}"[:6]
+            reserved = f"{keg['reserved']}x{keg['volume']}"[:7]
+            available = f"{keg['available']}x{keg['volume']}"[:6]
             
             message_lines.append(
-                f"{available:>5} {name:<20} {abv:>5} {price:>7} {reserved:>7} {total:>6}"
+                f"{name:<20} {abv:>5} {price:>7} {total:>6} {reserved:>7} {available:>6}"
             )
     else:
         # 3-column layout: Finns, Namn, Pris (mobile-friendly, max 27 chars)
         message_lines.extend([
-            f"{'Finns':>5} {'Namn':<10} {'ABV':>5} {'Pris':>4}",
+            f"{'Namn':<10} {'ABV':>5} {'Pris':>4} {'Tillg':>5} ",
             "-" * 27
         ])
         
         for keg in sorted_kegs:
-            available = f"{keg['available']}x{keg['volume']}"[:5]
             name = f"{keg['name']}"[:10]
             abv = f"{keg['abv']}"[:5]
             price = f"{int(keg['price'])}"[:4]
+            available = f"{keg['available']}x{keg['volume']}"[:5]
             
             message_lines.append(
-                f"{available:>5} {name:<10} {abv:>5} {price:>4}"
+                f"{name:<10} {abv:>5} {price:>4} {available:>5}"
             )
     
     message_lines.append("```")
@@ -401,7 +353,7 @@ def format_cans_message(cans: list, show_all: bool = False) -> str:
     
     # Common header for both layouts
     message_lines = [
-        f"🥫 *Antal burkar i lager* ({total_cans} sorter, {total_boxes} kartonger totalt, {total_reserved_boxes} reserverade)",
+        f"🥫 *Antal lock i lager* ({total_cans} sorter, {total_boxes} lock totalt varav {total_reserved_boxes} reserverade)",
         f"_{current_time}_\n",
         "```"
     ]
@@ -409,20 +361,20 @@ def format_cans_message(cans: list, show_all: bool = False) -> str:
     if show_all:
         # 5-column layout: Lådor, Namn, ABV, Pris, Reserv., Totalt
         message_lines.extend([
-            f"{'Lådor':>6} {'Namn':<20} {'ABV':>5} {'Pris':>6} {'Reserv.':>7} {'Totalt':>6}",
+            f"{'Namn':<20} {'ABV':>5} {'Pris':<6} {'Totalt':<6} {'Reserv.':<7} {'Tillg.':<6}",
             "-" * 55
         ])
         
         for can in sorted_cans:
-            available = f"{can['available_boxes']}"[:6]
             name = f"{can['name']}"[:20]
             abv = f"{can['abv']}"[:5]
             price = f"{int(can['price'])} kr"[:6]
-            reserved = f"{can['reserved_boxes']}"[:7]
             total = f"{can['boxes']}"[:6]
+            reserved = f"{can['reserved_boxes']}"[:7]
+            available = f"{can['available_boxes']}"[:6]
             
             message_lines.append(
-                f"{available:>6} {name:<20} {abv:>5} {price:>6} {reserved:>7} {total:>6}"
+                f"{name:<20} {abv:>5} {price:>6} {total:>6} {reserved:>7} {available:>6}"
             )
     else:
         # 3-column layout: Lådor, Namn, ABV, Pris (mobile-friendly)
