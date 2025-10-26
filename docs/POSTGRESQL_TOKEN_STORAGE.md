@@ -190,9 +190,12 @@ SLACK_APP_TOKEN=xapp-[dev-token]...
 ENVIRONMENT=development
 ```
 
-**3. Sync tokens from production database:**
+**3. Sync tokens locally from production**
+
+To run the bot locally with fresh tokens, sync the latest tokens from production using the helper script (uses `railway ssh` under the hood):
+
 ```bash
-./scripts/sync_tokens_from_db.sh
+./scripts/sync_tokens.sh
 ```
 
 This uses Railway CLI to fetch tokens from production and saves them to `fortnox_tokens.json`.
@@ -272,11 +275,11 @@ SLACK_* = testing/dev workspace (same as staging)
 **Syncing Tokens for Local Dev:**
 
 ```bash
-# Pull latest tokens from production database via Railway CLI
-./scripts/sync_tokens_from_db.sh
+# Pull latest tokens from production volume via Railway CLI (`railway ssh`)
+./scripts/sync_tokens.sh
 ```
 
-The script uses Railway CLI to fetch tokens from production and save locally.
+The script uses Railway CLI (`railway ssh -- cat /data/fortnox_tokens.json > fortnox_tokens.json`) to fetch tokens from production and save locally.
 
 ---
 
@@ -293,7 +296,7 @@ The script uses Railway CLI to fetch tokens from production and save locally.
 - [ ] **Step 9:** Deploy to staging (`staging` branch)
 - [ ] **Step 10:** Verify staging reads from database in readonly mode
 - [ ] **Step 11:** Install Railway CLI locally
-- [ ] **Step 12:** Run `sync_tokens_from_db.sh` to pull tokens locally
+- [ ] **Step 12:** Run `sync_tokens.sh` to pull tokens locally
 - [ ] **Step 13:** Test local bot with synced tokens
 
 ---
@@ -335,7 +338,7 @@ railway logs --service staging | grep "TokenManager"
 3. Verify database unchanged (production tokens still there)
 
 ### **Test 6: Local Token Sync**
-1. Run `./scripts/sync_tokens_from_db.sh`
+1. Run `./scripts/sync_tokens.sh`
 2. Check `fortnox_tokens.json` was updated
 3. Verify matches production database timestamps
 
@@ -343,9 +346,9 @@ railway logs --service staging | grep "TokenManager"
 
 ## 🛠️ Helper Scripts
 
-### **`scripts/sync_tokens_from_db.sh`**
+### **`scripts/sync_tokens.sh`**
 
-Downloads tokens from production database to local file via Railway CLI.
+Downloads tokens from production volume to local file via Railway CLI (`railway ssh`).
 
 **Prerequisites:**
 - Railway CLI installed and logged in
@@ -353,7 +356,7 @@ Downloads tokens from production database to local file via Railway CLI.
 
 **Usage:**
 ```bash
-./scripts/sync_tokens_from_db.sh
+./scripts/sync_tokens.sh
 ```
 
 **Result:**
@@ -377,7 +380,7 @@ Downloads tokens from production database to local file via Railway CLI.
 **Solution:**
 1. Run `scripts/setup_db_readonly_role.py` on production
 2. Copy the read-only connection string to `.env.development`
-3. Retry `./scripts/sync_tokens_from_db.sh`
+3. Retry `./scripts/sync_tokens.sh`
 
 ### **Problem: Production shows "Failed to initialize database"**
 
@@ -437,7 +440,7 @@ Downloads tokens from production database to local file via Railway CLI.
 2. ./venv/bin/pip install psycopg2-binary
 
 # Normal workflow
-- ./scripts/sync_tokens_from_db.sh  # Pull latest tokens
+- ./scripts/sync_tokens.sh  # Pull latest tokens
 - ./venv/bin/python -m src.bot      # Run bot locally
 - Re-sync tokens periodically
 ```

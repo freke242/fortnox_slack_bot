@@ -145,7 +145,7 @@ The bot uses **PostgreSQL for production/staging** and **file-based storage for 
 **Local Development:**
 - File-based storage (`fortnox_tokens.json`)
 - **MUST use `TOKEN_STORAGE_READONLY=true` in `.env`**
-- Sync tokens from production via: `./scripts/sync_tokens_from_db.sh`
+- Sync tokens from production via: `./scripts/sync_tokens.sh`
 
 #### **⚠️ CRITICAL: Fortnox OAuth Token Behavior**
 
@@ -162,14 +162,14 @@ Fortnox **only allows ONE active OAuth session per application**. When you gener
 
 **Correct approach for local development:**
 1. Set `TOKEN_STORAGE_READONLY=true` in local `.env`
-2. Sync tokens from production: `./scripts/sync_tokens_from_db.sh`
+2. Sync tokens from production: `./scripts/sync_tokens.sh`
 3. Never run `get_fortnox_token.py` unless you're intentionally updating production
 
 **Token Management Files:**
 - `src/token_manager.py` - Handles reading/writing tokens with thread-safe locking
 - `fortnox_tokens.json` - Stores current access_token and refresh_token locally (created automatically)
 - `scripts/get_fortnox_token.py` - ⚠️ **PRODUCTION ONLY** - Generates initial tokens via OAuth flow
-- `scripts/sync_tokens_from_db.sh` - Syncs tokens from production to local file
+- `scripts/sync_tokens.sh` - Syncs tokens from production to local file (uses `railway ssh -- cat /data/fortnox_tokens.json > fortnox_tokens.json` under the hood)
 
 ### Fortnox API Pagination
 The `fortnox_client.py` implements automatic pagination:
