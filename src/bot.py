@@ -673,7 +673,8 @@ if __name__ == "__main__":
             tokens = token_manager.load_tokens()
             if tokens:
                 current_access_token = tokens['access_token']
-                fortnox_client = FortnoxClient(current_access_token)
+                client_secret = os.environ.get("FORTNOX_CLIENT_SECRET")
+                fortnox_client = FortnoxClient(current_access_token, client_secret)
                 logger.info("✅ Fortnox client initialized with existing tokens")
             else:
                 logger.error("❌ No tokens found in storage and running in read-only mode")
