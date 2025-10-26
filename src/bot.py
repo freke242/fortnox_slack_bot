@@ -351,50 +351,62 @@ def format_cans_message(cans: list, show_all: bool = False) -> str:
     # Get current timestamp
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
     
+    # Split cans based on label presence
+    labeled_cans = []
+    unlabeled_cans = []
+    for can in sorted_cans:
+        name_value = can.get('name', '')
+        if name_value and 'utan etikett' in name_value.lower():
+            unlabeled_cans.append(can)
+        else:
+            labeled_cans.append(can)
+
+    def render_table(table_cans: list) -> list[str]:
+        if not table_cans:
+            return []
+
+        lines = ["```"]
+        if show_all:
+            lines.extend([
+                f"{'Namn':<20} {'ABV':>5} {'Pris':<6} {'Totalt':<6} {'Reserv.':<7} {'Tillg.':<6}",
+                "-" * 55
+            ])
+            for can in table_cans:
+                name = f"{can['name']}"[:20]
+                abv = f"{can['abv']}"[:5]
+                price = f"{int(can['price'])} kr"[:6]
+                total = f"{can['boxes']}"[:6]
+                reserved = f"{can['reserved_boxes']}"[:7]
+                available = f"{can['available_boxes']}"[:6]
+                lines.append(f"{name:<20} {abv:>5} {price:>6} {total:>6} {reserved:>7} {available:>6}")
+        else:
+            lines.extend([
+                f"{'Namn':<10} {'ABV':>5} {'Pris':>4} {'Tillg':>5} ",
+                "-" * 27
+            ])
+            for can in table_cans:
+                name = f"{can['name']}"[:10]
+                abv = f"{can['abv']}"[:5]
+                price = f"{int(can['price'])}"[:4]
+                available = f"{can['available_boxes']}"[:5]
+                lines.append(f"{name:<10} {abv:>5} {price:>4} {available:>5}")
+        lines.append("```")
+        return lines
+
     # Common header for both layouts
     message_lines = [
         f"🥫 *Antal lock i lager* ({total_cans} sorter, {total_boxes} lock totalt varav {total_reserved_boxes} reserverade)",
-        f"_{current_time}_\n",
-        "```"
+        f"_{current_time}_\n"
     ]
-    
-    if show_all:
-        # 5-column layout: Lådor, Namn, ABV, Pris, Reserv., Totalt
-        message_lines.extend([
-            f"{'Namn':<20} {'ABV':>5} {'Pris':<6} {'Totalt':<6} {'Reserv.':<7} {'Tillg.':<6}",
-            "-" * 55
-        ])
-        
-        for can in sorted_cans:
-            name = f"{can['name']}"[:20]
-            abv = f"{can['abv']}"[:5]
-            price = f"{int(can['price'])} kr"[:6]
-            total = f"{can['boxes']}"[:6]
-            reserved = f"{can['reserved_boxes']}"[:7]
-            available = f"{can['available_boxes']}"[:6]
-            
-            message_lines.append(
-                f"{name:<20} {abv:>5} {price:>6} {total:>6} {reserved:>7} {available:>6}"
-            )
-    else:
-        # 3-column layout: Lådor, Namn, ABV, Pris (mobile-friendly)
-        message_lines.extend([
-            f"{'Lådor':>6} {'Namn':<10} {'ABV':>5} {'Pris':>4}",
-            "-" * 28
-        ])
-        
-        for can in sorted_cans:
-            available = f"{can['available_boxes']}"[:6]
-            name = f"{can['name']}"[:10]
-            abv = f"{can['abv']}"[:5]
-            price = f"{int(can['price'])}"[:4]
-            
-            message_lines.append(
-                f"{available:>6} {name:<10} {abv:>5} {price:>4}"
-            )
-    
-    message_lines.append("```")
-    
+
+    if labeled_cans:
+        message_lines.extend(render_table(labeled_cans))
+
+    if unlabeled_cans:
+        message_lines.append("")
+        message_lines.append("⚠️ *Burkar utan etikett*")
+        message_lines.extend(render_table(unlabeled_cans))
+
     return "\n".join(message_lines)
 
 
