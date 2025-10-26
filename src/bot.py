@@ -665,33 +665,48 @@ if __name__ == "__main__":
             logger.warning("⚠️  Could not initialize token file from environment")
             logger.warning("    Attempting to use existing token file...")
         
-        # Refresh Fortnox token at startup
-        logger.info("Initializing Fortnox connection...")
-        if not refresh_fortnox_token():
-            logger.error("=" * 70)
-            logger.error("❌ CRITICAL: Failed to refresh Fortnox token at startup")
-            logger.error("=" * 70)
-            logger.error("This usually means:")
-            logger.error("  1. FORTNOX_REFRESH_TOKEN is invalid or expired")
-            logger.error("  2. Environment variables have quotes around them (remove quotes!)")
-            logger.error("  3. Token was revoked in Fortnox Developer Portal")
-            logger.error("")
-            logger.error("To fix:")
-            logger.error("  1. Run: ./venv/bin/python get_fortnox_token.py")
-            logger.error("  2. Get fresh tokens")
-            logger.error("  3. Update Railway environment variables (without quotes)")
-            logger.error("=" * 70)
-            logger.error("Bot will sleep for 1 hour to avoid hammering Fortnox API...")
-            logger.error("(This prevents Railway from restarting the bot repeatedly)")
-            logger.error("=" * 70)
-            # Sleep for 1 hour instead of exiting to prevent rapid restart loop
-            time.sleep(3600)
-            exit(1)
-        
-        # Start background token refresh scheduler
-        logger.info("Starting token refresh scheduler (every 50 minutes)...")
-        refresh_thread = threading.Thread(target=token_refresh_scheduler, daemon=True)
-        refresh_thread.start()
+        # Skip token refresh and background scheduler in read-only mode
+        if token_manager.readonly:
+            logger.info("ℹ️  Running in READ-ONLY mode - skipping token refresh")
+            logger.info("   Using tokens from storage as-is (production manages refresh)")
+            # Just initialize the client with current tokens
+            tokens = token_manager.load_tokens()
+            if tokens:
+                current_access_token = tokens['access_token']
+                fortnox_client = FortnoxClient(current_access_token)
+                logger.info("✅ Fortnox client initialized with existing tokens")
+            else:
+                logger.error("❌ No tokens found in storage and running in read-only mode")
+                logger.error("   Production must initialize tokens first")
+                exit(1)
+        else:
+            # Refresh Fortnox token at startup (production only)
+            logger.info("Initializing Fortnox connection...")
+            if not refresh_fortnox_token():
+                logger.error("=" * 70)
+                logger.error("❌ CRITICAL: Failed to refresh Fortnox token at startup")
+                logger.error("=" * 70)
+                logger.error("This usually means:")
+                logger.error("  1. FORTNOX_REFRESH_TOKEN is invalid or expired")
+                logger.error("  2. Environment variables have quotes around them (remove quotes!)")
+                logger.error("  3. Token was revoked in Fortnox Developer Portal")
+                logger.error("")
+                logger.error("To fix:")
+                logger.error("  1. Run: ./venv/bin/python get_fortnox_token.py")
+                logger.error("  2. Get fresh tokens")
+                logger.error("  3. Update Railway environment variables (without quotes)")
+                logger.error("=" * 70)
+                logger.error("Bot will sleep for 1 hour to avoid hammering Fortnox API...")
+                logger.error("(This prevents Railway from restarting the bot repeatedly)")
+                logger.error("=" * 70)
+                # Sleep for 1 hour instead of exiting to prevent rapid restart loop
+                time.sleep(3600)
+                exit(1)
+            
+            # Start background token refresh scheduler (production only)
+            logger.info("Starting token refresh scheduler (every 50 minutes)...")
+            refresh_thread = threading.Thread(target=token_refresh_scheduler, daemon=True)
+            refresh_thread.start()
         
         # Start the bot using Socket Mode
         handler = SocketModeHandler(app, os.environ.get("SLACK_APP_TOKEN"))
