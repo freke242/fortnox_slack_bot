@@ -82,17 +82,15 @@ class TokenManager:
         storage_mode = "read-only" if self.readonly else "read/write"
         logger.info(f"TokenManager initialized: {self.storage_type} storage ({storage_mode})")
         
+        # Always set token_file path for fallback capability
+        volume_path = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
+        if volume_path:
+            self.token_file = Path(volume_path) / TOKEN_FILE
+        else:
+            self.token_file = Path(TOKEN_FILE)
+        
         if USE_DATABASE:
             self._init_database()
-        elif not USE_DATABASE:
-            # Local file storage setup
-            volume_path = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
-            if volume_path:
-                self.token_file = Path(volume_path) / TOKEN_FILE
-                logger.info(f"Using Railway volume for tokens: {self.token_file}")
-            else:
-                self.token_file = Path(TOKEN_FILE)
-                logger.info(f"Using local file for tokens: {self.token_file}")
     
     def _init_database(self):
         """Create tokens table if it doesn't exist"""
