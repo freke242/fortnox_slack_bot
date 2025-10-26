@@ -67,21 +67,11 @@ git push origin main
 - Production service gets `DATABASE_URL` environment variable
 - Format: `postgresql://user:pass@host:port/dbname`
 
-### **Step 4: Setup Read-Only Database Role**
+### **Step 4: Configure Staging Service**
 
-This creates a read-only PostgreSQL user for staging and local environments.
+Staging uses the **same database** as production but with application-level read-only protection.
 
-```bash
-# Run from production Railway environment
-railway link --service production
-railway run python3 scripts/setup_db_readonly_role.py
-```
-
-**Script will output:**
-- `DATABASE_URL` (readonly connection string) for staging
-- `DATABASE_URL_RO` for local development
-
-**Save these values** - you'll need them in the next steps.
+No separate database user needed - the `TOKEN_STORAGE_READONLY` flag prevents writes.
 
 ### **Step 5: Configure Production Environment**
 
@@ -120,21 +110,27 @@ TokenManager initialized: database storage (read/write)
 
 ### **Step 6: Configure Staging Environment**
 
-Create a **second Railway project** or service for staging that deploys from `staging` branch.
+Create a **second service in the same Railway project** that deploys from `staging` branch.
 
-In Railway dashboard, **staging service** → Variables:
+1. **In Railway dashboard** → Your project → Click **"New"** → **"Service"** → **"GitHub Repo"**
+2. Select your repo and configure:
+   - **Branch**: `staging` (not main)
+   - **Name**: e.g., "fortnox-bot-staging"
+
+3. **Configure environment variables** in staging service → Variables:
 
 ```bash
-# Database - Use the READONLY connection string from Step 4
-DATABASE_URL=postgresql://fortnox_readonly:...@.../...
+# Database - Reference the same PostgreSQL service
+# Use "Add Reference" → Select PostgreSQL → DATABASE_URL
+DATABASE_URL=${{Postgres.DATABASE_URL}}  # Same as production
 
 # Read-only mode - CRITICAL!
-TOKEN_STORAGE_READONLY=true
+TOKEN_STORAGE_READONLY=true  # Prevents writing to database
 
 # Environment identification
 ENVIRONMENT=staging
 
-# Fortnox credentials (same as production - read-only token access)
+# Fortnox credentials (same as production)
 FORTNOX_CLIENT_ID=...
 FORTNOX_CLIENT_SECRET=...
 
@@ -144,10 +140,9 @@ SLACK_SIGNING_SECRET=[staging-secret]...
 SLACK_APP_TOKEN=xapp-[staging-token]...
 ```
 
-**Deploy to staging:**
+4. **Create and push staging branch:**
 ```bash
-git checkout staging
-git merge main
+git checkout -b staging
 git push origin staging
 ```
 
@@ -160,13 +155,29 @@ TokenManager initialized: database storage (read-only)
 
 ### **Step 7: Configure Local Development**
 
-Create `.env.development` file (not committed to git):
+Local development uses file-based storage with sync from production database.
+
+**1. Install Railway CLI (if not already installed):**
+```bash
+# Via npm
+npm i -g @railway/cli
+
+# OR via shell
+curl -fsSL https://railway.app/install.sh | sh
+
+# Login
+railway login
+
+# Link to your project
+railway link
+```
+
+**2. Create `.env` file** (or `.env.development`):
 
 ```bash
-# Database - Use readonly connection string from Step 4
-DATABASE_URL_RO=postgresql://fortnox_readonly:...@.../...
+# No DATABASE_URL needed locally - uses file storage
 
-# Fortnox credentials (not actually used since we sync from DB)
+# Fortnox credentials
 FORTNOX_CLIENT_ID=...
 FORTNOX_CLIENT_SECRET=...
 
@@ -179,18 +190,14 @@ SLACK_APP_TOKEN=xapp-[dev-token]...
 ENVIRONMENT=development
 ```
 
-**Sync tokens from database:**
+**3. Sync tokens from production database:**
 ```bash
-# First time setup
-./venv/bin/pip install psycopg2-binary
-
-# Pull latest tokens from production database
 ./scripts/sync_tokens_from_db.sh
 ```
 
-This creates `fortnox_tokens.json` locally with latest tokens.
+This uses Railway CLI to fetch tokens from production and saves them to `fortnox_tokens.json`.
 
-**Run bot locally:**
+**4. Run bot locally:**
 ```bash
 ./venv/bin/python -m src.bot
 ```
@@ -200,6 +207,8 @@ Check logs for:
 TokenManager initialized: file storage (read/write)
 ✅ Tokens read from file: fortnox_tokens.json
 ```
+
+**Re-sync tokens periodically** when they become stale (production refreshes them every 50 minutes).
 
 ---
 
@@ -227,27 +236,26 @@ SLACK_* = production workspace
 
 **Configuration:**
 ```bash
-DATABASE_URL=postgresql://fortnox_readonly:... # Read-only!
-TOKEN_STORAGE_READONLY=true # CRITICAL
+DATABASE_URL=${{Postgres.DATABASE_URL}} # Same connection as production
+TOKEN_STORAGE_READONLY=true # CRITICAL - prevents writes
 ENVIRONMENT=staging
 SLACK_* = testing/dev workspace (different from prod!)
 ```
 
-**Token Storage:** PostgreSQL database (read-only)
+**Token Storage:** PostgreSQL database (application-level read-only)
 
 **Behavior:**
 - ✅ Reads tokens from same database as production
-- ⚠️  **Cannot** refresh tokens (read-only mode)
+- ⚠️  **Cannot** refresh tokens (TOKEN_STORAGE_READONLY prevents writes)
 - ✅ Always has latest tokens from production
 - ✅ Testing/Dev Slack workspace (isolated from production users)
-- ℹ️  If token refresh is triggered, it logs warning and continues
+- ℹ️  If token refresh is triggered, logs warning and continues without writing
 
 ### **Local Development**
 
 **Configuration:**
 ```bash
 # No DATABASE_URL - uses file storage
-DATABASE_URL_RO=postgresql://fortnox_readonly:... # For sync script only
 ENVIRONMENT=development
 SLACK_* = testing/dev workspace (same as staging)
 ```
@@ -256,7 +264,7 @@ SLACK_* = testing/dev workspace (same as staging)
 
 **Behavior:**
 - ✅ Uses file storage (no database connection while running)
-- ✅ Syncs tokens from database via `sync_tokens_from_db.sh` script
+- ✅ Syncs tokens from production database via Railway CLI
 - ✅ Writes refreshed tokens to local file (independent from prod)
 - ✅ Testing/Dev Slack workspace (same as staging)
 - ℹ️  Tokens can drift from production if not synced regularly
@@ -264,24 +272,11 @@ SLACK_* = testing/dev workspace (same as staging)
 **Syncing Tokens for Local Dev:**
 
 ```bash
-# Pull latest tokens from production database
+# Pull latest tokens from production database via Railway CLI
 ./scripts/sync_tokens_from_db.sh
-
-# Alternatively, manually via Railway CLI:
-railway link
-railway run --service production python3 << 'EOF'
-from src.token_manager import TokenManager
-import json
-
-tm = TokenManager()
-tokens = tm.load_tokens()
-
-with open('fortnox_tokens.json', 'w') as f:
-    json.dump(tokens, f, indent=2)
-
-print("✅ Tokens downloaded to fortnox_tokens.json")
-EOF
 ```
+
+The script uses Railway CLI to fetch tokens from production and save locally.
 
 ---
 
@@ -290,17 +285,16 @@ EOF
 - [ ] **Step 1:** Update dependencies (psycopg2-binary added)
 - [ ] **Step 2:** Update code (TokenManager with PostgreSQL support)
 - [ ] **Step 3:** Add PostgreSQL database to Railway production
-- [ ] **Step 4:** Run `setup_db_readonly_role.py` to create readonly user
-- [ ] **Step 5:** Configure production environment variables
-- [ ] **Step 6:** Deploy to production (`main` branch)
-- [ ] **Step 7:** Verify production uses database (check logs)
-- [ ] **Step 8:** Configure staging environment with readonly DATABASE_URL
+- [ ] **Step 4:** Configure production environment variables
+- [ ] **Step 5:** Deploy to production (`main` branch)
+- [ ] **Step 6:** Verify production uses database (check logs)
+- [ ] **Step 7:** Create staging service in same Railway project
+- [ ] **Step 8:** Configure staging with DATABASE_URL reference and TOKEN_STORAGE_READONLY=true
 - [ ] **Step 9:** Deploy to staging (`staging` branch)
 - [ ] **Step 10:** Verify staging reads from database in readonly mode
-- [ ] **Step 11:** Configure local `.env.development` with DATABASE_URL_RO
+- [ ] **Step 11:** Install Railway CLI locally
 - [ ] **Step 12:** Run `sync_tokens_from_db.sh` to pull tokens locally
 - [ ] **Step 13:** Test local bot with synced tokens
-- [ ] **Step 14:** Update documentation (this file)
 
 ---
 
@@ -349,32 +343,22 @@ railway logs --service staging | grep "TokenManager"
 
 ## 🛠️ Helper Scripts
 
-### **`scripts/setup_db_readonly_role.py`**
-
-Creates read-only PostgreSQL role and outputs connection strings.
-
-**Usage:**
-```bash
-railway run --service production python3 scripts/setup_db_readonly_role.py
-```
-
-**Outputs:**
-- Readonly `DATABASE_URL` for staging
-- Readonly `DATABASE_URL_RO` for local development
-
 ### **`scripts/sync_tokens_from_db.sh`**
 
-Downloads tokens from production database to local file.
+Downloads tokens from production database to local file via Railway CLI.
+
+**Prerequisites:**
+- Railway CLI installed and logged in
+- Linked to your project (`railway link`)
 
 **Usage:**
 ```bash
-# Make sure DATABASE_URL_RO is in .env.development
 ./scripts/sync_tokens_from_db.sh
 ```
 
 **Result:**
 - Updates `fortnox_tokens.json` with latest production tokens
-- Shows last update timestamp from database
+- Fetches directly from production database
 
 ---
 
