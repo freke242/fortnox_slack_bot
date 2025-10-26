@@ -1,657 +1,474 @@
-# PostgreSQL Token Storage Migration Guide
+# PostgreSQL Token Storage Implementation Guide
 
 ## 📋 Overview
 
-This document describes how to migrate from file-based token storage to PostgreSQL-based shared token storage across all environments.
+This document describes the PostgreSQL-based token storage implementation for the Fortnox Slack Bot across production, staging, and local development environments.
 
 ### **Why PostgreSQL?**
 
-- ✅ **Shared state** - Production and staging share the same tokens
-- ✅ **No token conflicts** - Single source of truth
+- ✅ **Shared state** - Production manages tokens, staging/local consume them
+- ✅ **No token conflicts** - Single source of truth with read-only consumers
 - ✅ **Railway native** - Free PostgreSQL tier included
-- ✅ **Local dev friendly** - Falls back to file storage when DB not available
-- ✅ **Automatic sync** - All environments always have latest tokens
+- ✅ **Local dev friendly** - Syncs tokens from database to local file
+- ✅ **Automatic refresh** - Only production refreshes tokens
 
-### **Current State**
-
-```
-Environment          Token Storage
-------------------   --------------------------
-Production (Railway) → /data/fortnox_tokens.json (Railway volume)
-Staging (Railway)    → /data/fortnox_tokens.json (Railway volume)
-Local Development    → ./fortnox_tokens.json (local file)
-```
-
-**Problem:** Each environment has separate token files, leading to occasional conflicts when Fortnox rotates refresh tokens.
-
-### **Target State**
+### **Architecture**
 
 ```
-Environment          Token Storage
-------------------   --------------------------
-Production (Railway) → PostgreSQL database (shared)
-Staging (Railway)    → PostgreSQL database (shared)
-Local Development    → ./fortnox_tokens.json (fallback to file)
+Environment                 Token Storage Mode         Slack Workspace
+--------------------------  -------------------------  ------------------
+Production (Railway main)   PostgreSQL (read/write)    Production
+Staging (Railway staging)   PostgreSQL (read-only)     Testing/Dev
+Local Development           File + DB sync (read-only) Testing/Dev
 ```
 
-**Benefit:** Production and staging always share the same tokens. Local dev can sync when needed.
+**Key Design:**
+- **Production**: Only environment that writes tokens (manages refresh)
+- **Staging**: Reads from same database, separate Slack workspace
+- **Local**: Syncs tokens from database to local file for development
 
 ---
 
 ## 🚀 Implementation Steps
 
-### **Step 1: Add PostgreSQL to Railway**
+### **Step 1: Update Dependencies**
 
-1. Go to Railway dashboard: https://railway.app/dashboard
-2. Select your Fortnox Slack Bot project
-3. Click **"New"** → **"Database"** → **"Add PostgreSQL"**
-4. Railway creates a PostgreSQL instance
-5. Railway automatically adds `DATABASE_URL` to both services
+PostgreSQL driver `psycopg2-binary==2.9.9` has been added to `requirements.txt`.
 
-**Expected Result:**
-- Database service appears in project
-- Both `production` and `staging` services get `DATABASE_URL` env var
-- Format: `postgresql://user:pass@host:port/dbname`
-
-### **Step 2: Update Dependencies**
-
-Add PostgreSQL driver to `requirements.txt`:
-
-```txt
-# Add after existing dependencies
-psycopg2-binary==2.9.9
-```
-
-Commit and push:
 ```bash
 git add requirements.txt
 git commit -m "Add PostgreSQL dependency for shared token storage"
 git push origin main
 ```
 
-### **Step 3: Update Token Manager**
+### **Step 2: Update Code**
 
-Replace `src/token_manager.py` with the new implementation:
+The `src/token_manager.py` has been updated to support:
+- PostgreSQL database storage (when `DATABASE_URL` is set)
+- Read-only mode (when `TOKEN_STORAGE_READONLY=true`)
+- File-based fallback (when no `DATABASE_URL`)
 
-**Key Changes:**
-- Detect `DATABASE_URL` environment variable
-- Use PostgreSQL when available (Railway production/staging)
-- Fall back to file storage when not available (local development)
-- Automatic table creation on first run
-- Thread-safe database operations
-
-**File: `src/token_manager.py`**
-
-```python
-"""
-Token Manager - Handles Fortnox token storage
-Supports both PostgreSQL (Railway) and file-based (local) storage
-"""
-import os
-import json
-import threading
-import logging
-from contextlib import contextmanager
-from typing import Optional, Dict
-
-logger = logging.getLogger(__name__)
-
-# Database configuration
-DATABASE_URL = os.getenv('DATABASE_URL')
-USE_DATABASE = DATABASE_URL is not None
-
-# File configuration
-TOKEN_FILE = os.getenv('TOKEN_FILE', 'fortnox_tokens.json')
-
-# Import PostgreSQL driver only if database is configured
-if USE_DATABASE:
-    try:
-        import psycopg2
-        from psycopg2.extras import RealDictCursor
-    except ImportError:
-        logger.warning("psycopg2 not installed, falling back to file storage")
-        USE_DATABASE = False
-
-
-@contextmanager
-def get_db_connection():
-    """Context manager for database connections"""
-    if not USE_DATABASE:
-        raise RuntimeError("Database not configured")
-    
-    conn = psycopg2.connect(DATABASE_URL)
-    try:
-        yield conn
-        conn.commit()
-    except Exception as e:
-        conn.rollback()
-        logger.error(f"Database error: {e}")
-        raise
-    finally:
-        conn.close()
-
-
-class TokenManager:
-    """
-    Manages Fortnox OAuth tokens with support for both database and file storage
-    
-    Storage Strategy:
-    - Railway (production/staging): PostgreSQL database (shared)
-    - Local development: JSON file
-    
-    Thread Safety:
-    - Database: PostgreSQL handles concurrency
-    - File: Uses threading.Lock for file operations
-    """
-    
-    def __init__(self):
-        self.file_lock = threading.Lock()
-        self.storage_type = "database" if USE_DATABASE else "file"
-        
-        logger.info(f"TokenManager initialized with {self.storage_type} storage")
-        
-        if USE_DATABASE:
-            self._init_database()
-    
-    def _init_database(self):
-        """Create tokens table if it doesn't exist"""
-        try:
-            with get_db_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        CREATE TABLE IF NOT EXISTS fortnox_tokens (
-                            id INTEGER PRIMARY KEY DEFAULT 1,
-                            access_token TEXT NOT NULL,
-                            refresh_token TEXT NOT NULL,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            CONSTRAINT single_row CHECK (id = 1)
-                        );
-                        
-                        -- Create index for faster lookups
-                        CREATE INDEX IF NOT EXISTS idx_tokens_updated 
-                        ON fortnox_tokens(updated_at DESC);
-                    """)
-            logger.info("Database table initialized successfully")
-        except Exception as e:
-            logger.error(f"Failed to initialize database: {e}")
-            raise
-    
-    def read_tokens(self) -> Optional[Dict[str, str]]:
-        """
-        Read tokens from storage
-        
-        Returns:
-            dict with 'access_token' and 'refresh_token' keys, or None if not found
-        """
-        if USE_DATABASE:
-            return self._read_from_db()
-        else:
-            return self._read_from_file()
-    
-    def _read_from_db(self) -> Optional[Dict[str, str]]:
-        """Read tokens from PostgreSQL database"""
-        try:
-            with get_db_connection() as conn:
-                with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                    cur.execute("""
-                        SELECT access_token, refresh_token, updated_at
-                        FROM fortnox_tokens 
-                        WHERE id = 1
-                    """)
-                    row = cur.fetchone()
-                    
-                    if row:
-                        logger.info(f"Tokens read from database (updated: {row['updated_at']})")
-                        return {
-                            'access_token': row['access_token'],
-                            'refresh_token': row['refresh_token']
-                        }
-                    else:
-                        logger.warning("No tokens found in database")
-                        return None
-        except Exception as e:
-            logger.error(f"Failed to read tokens from database: {e}")
-            return None
-    
-    def _read_from_file(self) -> Optional[Dict[str, str]]:
-        """Read tokens from JSON file (local development)"""
-        with self.file_lock:
-            try:
-                if not os.path.exists(TOKEN_FILE):
-                    logger.warning(f"Token file not found: {TOKEN_FILE}")
-                    return None
-                
-                with open(TOKEN_FILE, 'r') as f:
-                    tokens = json.load(f)
-                    logger.info(f"Tokens read from file: {TOKEN_FILE}")
-                    return tokens
-            except Exception as e:
-                logger.error(f"Failed to read tokens from file: {e}")
-                return None
-    
-    def write_tokens(self, access_token: str, refresh_token: str) -> bool:
-        """
-        Write tokens to storage
-        
-        Args:
-            access_token: Fortnox access token
-            refresh_token: Fortnox refresh token
-            
-        Returns:
-            True if successful, False otherwise
-        """
-        if USE_DATABASE:
-            return self._write_to_db(access_token, refresh_token)
-        else:
-            return self._write_to_file(access_token, refresh_token)
-    
-    def _write_to_db(self, access_token: str, refresh_token: str) -> bool:
-        """Write tokens to PostgreSQL database"""
-        try:
-            with get_db_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        INSERT INTO fortnox_tokens (id, access_token, refresh_token)
-                        VALUES (1, %s, %s)
-                        ON CONFLICT (id) 
-                        DO UPDATE SET 
-                            access_token = EXCLUDED.access_token,
-                            refresh_token = EXCLUDED.refresh_token,
-                            updated_at = CURRENT_TIMESTAMP
-                    """, (access_token, refresh_token))
-            
-            logger.info("Tokens written to database successfully")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to write tokens to database: {e}")
-            return False
-    
-    def _write_to_file(self, access_token: str, refresh_token: str) -> bool:
-        """Write tokens to JSON file (local development)"""
-        with self.file_lock:
-            try:
-                tokens = {
-                    'access_token': access_token,
-                    'refresh_token': refresh_token
-                }
-                
-                with open(TOKEN_FILE, 'w') as f:
-                    json.dump(tokens, f, indent=2)
-                
-                logger.info(f"Tokens written to file: {TOKEN_FILE}")
-                return True
-            except Exception as e:
-                logger.error(f"Failed to write tokens to file: {e}")
-                return False
-    
-    def migrate_from_env(self, access_token: str, refresh_token: str) -> bool:
-        """
-        Migrate tokens from environment variables to storage
-        
-        Args:
-            access_token: Token from FORTNOX_ACCESS_TOKEN env var
-            refresh_token: Token from FORTNOX_REFRESH_TOKEN env var
-            
-        Returns:
-            True if migration successful
-        """
-        logger.info(f"Migrating tokens from environment to {self.storage_type}")
-        return self.write_tokens(access_token, refresh_token)
-    
-    def get_storage_info(self) -> Dict[str, str]:
-        """Get information about current storage configuration"""
-        info = {
-            'storage_type': self.storage_type,
-            'environment': os.getenv('ENVIRONMENT', 'unknown')
-        }
-        
-        if USE_DATABASE:
-            info['database_url'] = DATABASE_URL[:30] + '...' if DATABASE_URL else 'None'
-        else:
-            info['token_file'] = TOKEN_FILE
-        
-        return info
-```
-
-Commit changes:
 ```bash
 git add src/token_manager.py
-git commit -m "Implement PostgreSQL token storage with file fallback"
+git commit -m "Implement PostgreSQL token storage with read-only mode"
 git push origin main
 ```
 
-### **Step 4: Migrate Existing Tokens**
+### **Step 3: Add PostgreSQL to Railway**
 
-After deployment, initialize the database with current tokens:
+1. Go to Railway dashboard: https://railway.app/dashboard
+2. Select your Fortnox Slack Bot **production** project
+3. Click **"New"** → **"Database"** → **"Add PostgreSQL"**
+4. Railway creates a PostgreSQL instance
+5. Railway automatically adds `DATABASE_URL` to the **production** service
 
-**Option A: Via Railway CLI**
-```bash
-# Link to production service
-railway link
+**Expected Result:**
+- Database service appears in project  
+- Production service gets `DATABASE_URL` environment variable
+- Format: `postgresql://user:pass@host:port/dbname`
 
-# Run migration script
-railway run --service production python3 << 'EOF'
-from src.token_manager import TokenManager
-import os
+### **Step 4: Setup Read-Only Database Role**
 
-tm = TokenManager()
-
-# Get tokens from environment variables (your current setup)
-access_token = os.getenv('FORTNOX_ACCESS_TOKEN')
-refresh_token = os.getenv('FORTNOX_REFRESH_TOKEN')
-
-if access_token and refresh_token:
-    success = tm.write_tokens(access_token, refresh_token)
-    if success:
-        print("✅ Tokens migrated to database successfully")
-        print(f"Storage info: {tm.get_storage_info()}")
-    else:
-        print("❌ Migration failed")
-else:
-    print("❌ Tokens not found in environment variables")
-EOF
-```
-
-**Option B: Via Railway Dashboard**
-1. Go to production service
-2. Click **"Deploy"** → **"Run a Command"**
-3. Paste the migration script above
-
-**Expected Output:**
-```
-✅ Tokens migrated to database successfully
-Storage info: {'storage_type': 'database', 'environment': 'production', 'database_url': 'postgresql://...'}
-```
-
-### **Step 5: Verify Database**
-
-Check that tokens are in the database:
+This creates a read-only PostgreSQL user for staging and local environments.
 
 ```bash
-railway run --service production python3 << 'EOF'
-from src.token_manager import TokenManager
-
-tm = TokenManager()
-tokens = tm.read_tokens()
-
-if tokens:
-    print("✅ Tokens found in database")
-    print(f"Access token: {tokens['access_token'][:20]}...")
-    print(f"Refresh token: {tokens['refresh_token'][:20]}...")
-else:
-    print("❌ No tokens in database")
-EOF
+# Run from production Railway environment
+railway link --service production
+railway run python3 scripts/setup_db_readonly_role.py
 ```
 
-### **Step 6: Remove Old Environment Variables (Optional)**
+**Script will output:**
+- `DATABASE_URL` (readonly connection string) for staging
+- `DATABASE_URL_RO` for local development
 
-Once tokens are in the database, you can remove them from Railway env vars:
+**Save these values** - you'll need them in the next steps.
 
-1. Go to Railway dashboard
-2. Production service → Variables
-3. **Keep for fallback:** `FORTNOX_CLIENT_SECRET`
-4. **Optional to remove:** `FORTNOX_ACCESS_TOKEN`, `FORTNOX_REFRESH_TOKEN`
+### **Step 5: Configure Production Environment**
 
-**Note:** Your code has fallback logic, so keeping them as backup is fine.
+In Railway dashboard, **production service** → Variables, ensure these are set:
+
+```bash
+# Database (auto-injected by Railway when you add PostgreSQL)
+DATABASE_URL=postgresql://... # Read/write access
+
+# Environment identification
+ENVIRONMENT=production
+
+# Fortnox credentials (already exist)
+FORTNOX_CLIENT_ID=...
+FORTNOX_CLIENT_SECRET=...
+FORTNOX_ACCESS_TOKEN=...  # Used for initial database seed
+FORTNOX_REFRESH_TOKEN=... # Used for initial database seed
+
+# Slack credentials - PRODUCTION WORKSPACE
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_SIGNING_SECRET=...
+SLACK_APP_TOKEN=xapp-...
+```
+
+**Deploy to production:**
+```bash
+git push origin main
+```
+
+Railway will auto-deploy. Check logs for:
+```
+TokenManager initialized: database storage (read/write)
+✅ Database table initialized successfully
+✅ Tokens read from database
+```
+
+### **Step 6: Configure Staging Environment**
+
+Create a **second Railway project** or service for staging that deploys from `staging` branch.
+
+In Railway dashboard, **staging service** → Variables:
+
+```bash
+# Database - Use the READONLY connection string from Step 4
+DATABASE_URL=postgresql://fortnox_readonly:...@.../...
+
+# Read-only mode - CRITICAL!
+TOKEN_STORAGE_READONLY=true
+
+# Environment identification
+ENVIRONMENT=staging
+
+# Fortnox credentials (same as production - read-only token access)
+FORTNOX_CLIENT_ID=...
+FORTNOX_CLIENT_SECRET=...
+
+# Slack credentials - TESTING/DEV WORKSPACE (different from production!)
+SLACK_BOT_TOKEN=xoxb-[staging-token]...
+SLACK_SIGNING_SECRET=[staging-secret]...
+SLACK_APP_TOKEN=xapp-[staging-token]...
+```
+
+**Deploy to staging:**
+```bash
+git checkout staging
+git merge main
+git push origin staging
+```
+
+Check staging logs for:
+```
+TokenManager initialized: database storage (read-only)
+✅ Tokens read from database (updated: ...)
+⚠️  Token storage is READ-ONLY - save_tokens() skipped
+```
+
+### **Step 7: Configure Local Development**
+
+Create `.env.development` file (not committed to git):
+
+```bash
+# Database - Use readonly connection string from Step 4
+DATABASE_URL_RO=postgresql://fortnox_readonly:...@.../...
+
+# Fortnox credentials (not actually used since we sync from DB)
+FORTNOX_CLIENT_ID=...
+FORTNOX_CLIENT_SECRET=...
+
+# Slack credentials - TESTING/DEV WORKSPACE (same as staging)
+SLACK_BOT_TOKEN=xoxb-[dev-token]...
+SLACK_SIGNING_SECRET=[dev-secret]...
+SLACK_APP_TOKEN=xapp-[dev-token]...
+
+# Environment identification
+ENVIRONMENT=development
+```
+
+**Sync tokens from database:**
+```bash
+# First time setup
+./venv/bin/pip install psycopg2-binary
+
+# Pull latest tokens from production database
+./scripts/sync_tokens_from_db.sh
+```
+
+This creates `fortnox_tokens.json` locally with latest tokens.
+
+**Run bot locally:**
+```bash
+./venv/bin/python -m src.bot
+```
+
+Check logs for:
+```
+TokenManager initialized: file storage (read/write)
+✅ Tokens read from file: fortnox_tokens.json
+```
 
 ---
 
 ## 🔧 Environment-Specific Behavior
 
-### **Production Environment (Railway)**
+### **Production Environment (Railway main branch)**
 
 **Configuration:**
 ```bash
-# Railway environment variables
-DATABASE_URL=postgresql://...  # Auto-injected by Railway
-FORTNOX_CLIENT_SECRET=...
-SLACK_BOT_TOKEN=xoxb-production...
-SLACK_APP_TOKEN=xapp-production...
+DATABASE_URL=postgresql://... # Read/write
 ENVIRONMENT=production
+SLACK_* = production workspace
 ```
 
-**Token Storage:** PostgreSQL database (shared with staging)
+**Token Storage:** PostgreSQL database (read/write)
 
 **Behavior:**
-- Reads tokens from database
-- Writes refreshed tokens to database
-- Staging service sees updates immediately
-- No file storage used
+- ✅ Reads tokens from database
+- ✅ Writes refreshed tokens to database (only environment that does this!)
+- ✅ Staging sees updates immediately
+- ✅ Background refresh every 50 minutes
+- ✅ Production Slack workspace
 
-### **Staging Environment (Railway)**
+### **Staging Environment (Railway staging branch)**
 
 **Configuration:**
 ```bash
-# Railway environment variables
-DATABASE_URL=postgresql://...  # Same database as production
-FORTNOX_CLIENT_SECRET=...
-SLACK_BOT_TOKEN=xoxb-dev...
-SLACK_APP_TOKEN=xapp-dev...
+DATABASE_URL=postgresql://fortnox_readonly:... # Read-only!
+TOKEN_STORAGE_READONLY=true # CRITICAL
 ENVIRONMENT=staging
+SLACK_* = testing/dev workspace (different from prod!)
 ```
 
-**Token Storage:** PostgreSQL database (shared with production)
+**Token Storage:** PostgreSQL database (read-only)
 
 **Behavior:**
-- Reads tokens from same database as production
-- Can refresh tokens (writes to shared database)
-- Production service sees updates immediately
-- No file storage used
+- ✅ Reads tokens from same database as production
+- ⚠️  **Cannot** refresh tokens (read-only mode)
+- ✅ Always has latest tokens from production
+- ✅ Testing/Dev Slack workspace (isolated from production users)
+- ℹ️  If token refresh is triggered, it logs warning and continues
 
 ### **Local Development**
 
 **Configuration:**
 ```bash
-# .env.development (no DATABASE_URL)
-FORTNOX_ACCESS_TOKEN=...  # Fallback only
-FORTNOX_REFRESH_TOKEN=... # Fallback only
-FORTNOX_CLIENT_SECRET=...
-SLACK_BOT_TOKEN=xoxb-dev...
-SLACK_APP_TOKEN=xapp-dev...
+# No DATABASE_URL - uses file storage
+DATABASE_URL_RO=postgresql://fortnox_readonly:... # For sync script only
 ENVIRONMENT=development
+SLACK_* = testing/dev workspace (same as staging)
 ```
 
 **Token Storage:** Local file `./fortnox_tokens.json`
 
 **Behavior:**
-- Uses file storage (no database connection)
-- Reads from `fortnox_tokens.json`
-- Writes refreshed tokens to local file
-- Independent from production/staging tokens
+- ✅ Uses file storage (no database connection while running)
+- ✅ Syncs tokens from database via `sync_tokens_from_db.sh` script
+- ✅ Writes refreshed tokens to local file (independent from prod)
+- ✅ Testing/Dev Slack workspace (same as staging)
+- ℹ️  Tokens can drift from production if not synced regularly
 
 **Syncing Tokens for Local Dev:**
 
-When you need fresh tokens locally:
-
 ```bash
-# Method 1: Download from database via Railway CLI
+# Pull latest tokens from production database
+./scripts/sync_tokens_from_db.sh
+
+# Alternatively, manually via Railway CLI:
 railway link
 railway run --service production python3 << 'EOF'
 from src.token_manager import TokenManager
 import json
 
 tm = TokenManager()
-tokens = tm.read_tokens()
+tokens = tm.load_tokens()
 
 with open('fortnox_tokens.json', 'w') as f:
     json.dump(tokens, f, indent=2)
 
 print("✅ Tokens downloaded to fortnox_tokens.json")
 EOF
-
-# Method 2: Use script (create this)
-./scripts/sync_tokens_from_railway.sh
 ```
 
 ---
 
-## 📝 Migration Checklist
+## 📝 Deployment Checklist
 
-- [ ] **Step 1:** Add PostgreSQL database to Railway project
-- [ ] **Step 2:** Update `requirements.txt` with `psycopg2-binary`
-- [ ] **Step 3:** Replace `src/token_manager.py` with new implementation
-- [ ] **Step 4:** Deploy to Railway (push to main branch)
-- [ ] **Step 5:** Migrate existing tokens to database
-- [ ] **Step 6:** Verify tokens in database
-- [ ] **Step 7:** Test production bot (should work with database tokens)
-- [ ] **Step 8:** Test staging bot (should share tokens with production)
-- [ ] **Step 9:** Download tokens for local development
-- [ ] **Step 10:** Test local bot (should use file storage)
-- [ ] **Step 11:** (Optional) Remove token env vars from Railway
-- [ ] **Step 12:** Update documentation
+- [ ] **Step 1:** Update dependencies (psycopg2-binary added)
+- [ ] **Step 2:** Update code (TokenManager with PostgreSQL support)
+- [ ] **Step 3:** Add PostgreSQL database to Railway production
+- [ ] **Step 4:** Run `setup_db_readonly_role.py` to create readonly user
+- [ ] **Step 5:** Configure production environment variables
+- [ ] **Step 6:** Deploy to production (`main` branch)
+- [ ] **Step 7:** Verify production uses database (check logs)
+- [ ] **Step 8:** Configure staging environment with readonly DATABASE_URL
+- [ ] **Step 9:** Deploy to staging (`staging` branch)
+- [ ] **Step 10:** Verify staging reads from database in readonly mode
+- [ ] **Step 11:** Configure local `.env.development` with DATABASE_URL_RO
+- [ ] **Step 12:** Run `sync_tokens_from_db.sh` to pull tokens locally
+- [ ] **Step 13:** Test local bot with synced tokens
+- [ ] **Step 14:** Update documentation (this file)
 
 ---
 
 ## 🧪 Testing Plan
 
-### **Test 1: Production Uses Database**
+### **Test 1: Production Uses Database (Read/Write)**
 ```bash
 railway logs --service production | grep "TokenManager"
-# Expected: "TokenManager initialized with database storage"
-# Expected: "Tokens read from database"
+# Expected: "TokenManager initialized: database storage (read/write)"
+# Expected: "✅ Tokens read from database"
+# Expected: "✅ Tokens written to database successfully" (on refresh)
 ```
 
-### **Test 2: Staging Uses Same Database**
+### **Test 2: Staging Uses Database (Read-Only)**
 ```bash
 railway logs --service staging | grep "TokenManager"
-# Expected: "TokenManager initialized with database storage"
-# Expected: "Tokens read from database"
+# Expected: "TokenManager initialized: database storage (read-only)"
+# Expected: "✅ Tokens read from database"
+# Expected: "⚠️  Token storage is READ-ONLY" (if refresh attempted)
 ```
 
-### **Test 3: Local Uses File**
+### **Test 3: Local Uses File Storage**
 ```bash
 ./venv/bin/python -m src.bot
-# Check logs for: "TokenManager initialized with file storage"
-# Check logs for: "Tokens read from file: fortnox_tokens.json"
+# Check logs for: "TokenManager initialized: file storage (read/write)"
+# Check logs for: "✅ Tokens read from file: fortnox_tokens.json"
 ```
 
-### **Test 4: Token Refresh Syncs Across Environments**
-1. Trigger token refresh in production (wait for auto-refresh or force)
-2. Check staging logs - should see updated tokens immediately
-3. Verify both services show same `updated_at` timestamp
+### **Test 4: Token Refresh Only Happens in Production**
+1. Wait for production token refresh (50 minutes or force)
+2. Check production logs: "✅ Tokens written to database successfully"
+3. Check staging logs: Should see updated tokens on next read
+4. Verify local stays unchanged (until you run sync script)
 
-### **Test 5: Local Development Independence**
-1. Refresh tokens locally
-2. Check production database - should remain unchanged
-3. Verify local file was updated
+### **Test 5: Staging Cannot Write Tokens**
+1. Try to trigger refresh in staging (shouldn't happen, but test defensive code)
+2. Check logs: "⚠️  Token storage is READ-ONLY - save_tokens() skipped"
+3. Verify database unchanged (production tokens still there)
+
+### **Test 6: Local Token Sync**
+1. Run `./scripts/sync_tokens_from_db.sh`
+2. Check `fortnox_tokens.json` was updated
+3. Verify matches production database timestamps
 
 ---
 
 ## 🛠️ Helper Scripts
 
-Create these scripts to make token management easier:
+### **`scripts/setup_db_readonly_role.py`**
 
-### **`scripts/sync_tokens_from_railway.sh`**
+Creates read-only PostgreSQL role and outputs connection strings.
+
+**Usage:**
 ```bash
-#!/bin/bash
-# Download tokens from Railway production database to local file
-
-set -e
-
-echo "🔄 Syncing tokens from Railway production..."
-
-railway link --service production 2>/dev/null || echo "Already linked"
-
-railway run python3 << 'EOF'
-from src.token_manager import TokenManager
-import json
-
-tm = TokenManager()
-tokens = tm.read_tokens()
-
-if tokens:
-    with open('fortnox_tokens.json', 'w') as f:
-        json.dump(tokens, f, indent=2)
-    print("✅ Tokens synced to fortnox_tokens.json")
-else:
-    print("❌ No tokens found in database")
-    exit(1)
-EOF
-
-echo "✅ Sync complete!"
+railway run --service production python3 scripts/setup_db_readonly_role.py
 ```
 
-Make it executable:
+**Outputs:**
+- Readonly `DATABASE_URL` for staging
+- Readonly `DATABASE_URL_RO` for local development
+
+### **`scripts/sync_tokens_from_db.sh`**
+
+Downloads tokens from production database to local file.
+
+**Usage:**
 ```bash
-chmod +x scripts/sync_tokens_from_railway.sh
+# Make sure DATABASE_URL_RO is in .env.development
+./scripts/sync_tokens_from_db.sh
 ```
 
-### **`scripts/check_token_storage.sh`**
+**Result:**
+- Updates `fortnox_tokens.json` with latest production tokens
+- Shows last update timestamp from database
+
+---
+
+## 🚨 Troubleshooting
+
+### **Problem: Staging shows "⚠️ Cannot initialize tokens in read-only mode"**
+
+**Cause:** Staging tried to initialize from env vars but is in read-only mode.
+
+**Solution:** Production must seed the database first. Deploy to production before staging.
+
+### **Problem: Local sync fails with "Database connection failed"**
+
+**Cause:** DATABASE_URL_RO not set or invalid.
+
+**Solution:**
+1. Run `scripts/setup_db_readonly_role.py` on production
+2. Copy the read-only connection string to `.env.development`
+3. Retry `./scripts/sync_tokens_from_db.sh`
+
+### **Problem: Production shows "Failed to initialize database"**
+
+**Cause:** DATABASE_URL not set or PostgreSQL not added to Railway.
+
+**Solution:**
+1. Verify PostgreSQL was added to Railway project
+2. Check that `DATABASE_URL` exists in production environment variables
+3. Redeploy production service
+
+### **Problem: Tokens not syncing between production and staging**
+
+**Cause:** Staging using wrong DATABASE_URL (not the readonly one).
+
+**Solution:**
+1. Verify staging has the read-only connection string (fortnox_readonly user)
+2. Check that `TOKEN_STORAGE_READONLY=true` is set in staging
+3. Restart staging service
+
+---
+
+## 🚂 Railway Workflow Summary
+
+### **Production (main branch):**
 ```bash
-#!/bin/bash
-# Check token storage configuration across all environments
+# One-time setup
+1. Add PostgreSQL to Railway project
+2. Run scripts/setup_db_readonly_role.py
+3. Configure environment variables
+4. git push origin main
 
-echo "=== Production Token Storage ==="
-railway run --service production python3 << 'EOF'
-from src.token_manager import TokenManager
-tm = TokenManager()
-info = tm.get_storage_info()
-print(f"Type: {info['storage_type']}")
-print(f"Environment: {info['environment']}")
-if 'database_url' in info:
-    print(f"Database: {info['database_url']}")
-EOF
-
-echo ""
-echo "=== Staging Token Storage ==="
-railway run --service staging python3 << 'EOF'
-from src.token_manager import TokenManager
-tm = TokenManager()
-info = tm.get_storage_info()
-print(f"Type: {info['storage_type']}")
-print(f"Environment: {info['environment']}")
-if 'database_url' in info:
-    print(f"Database: {info['database_url']}")
-EOF
-
-echo ""
-echo "=== Local Token Storage ==="
-./venv/bin/python << 'EOF'
-from src.token_manager import TokenManager
-import sys
-tm = TokenManager()
-info = tm.get_storage_info()
-print(f"Type: {info['storage_type']}")
-print(f"Environment: {info['environment']}")
-if 'token_file' in info:
-    print(f"File: {info['token_file']}")
-EOF
+# Normal workflow
+- Push to main → auto-deploys
+- Tokens refresh every 50 minutes
+- Database updated automatically
 ```
 
-Make it executable:
+### **Staging (staging branch):**
 ```bash
-chmod +x scripts/check_token_storage.sh
+# One-time setup
+1. Create second Railway service for staging branch
+2. Configure with readonly DATABASE_URL
+3. Set TOKEN_STORAGE_READONLY=true
+4. Configure testing Slack workspace credentials
+
+# Normal workflow
+- git checkout staging
+- git merge main
+- git push origin staging
+- Staging reads tokens from production database
+```
+
+### **Local Development:**
+```bash
+# One-time setup
+1. Create .env.development with DATABASE_URL_RO
+2. ./venv/bin/pip install psycopg2-binary
+
+# Normal workflow
+- ./scripts/sync_tokens_from_db.sh  # Pull latest tokens
+- ./venv/bin/python -m src.bot      # Run bot locally
+- Re-sync tokens periodically
 ```
 
 ---
 
-## 🚨 Rollback Plan
+## 📊 Benefits After Implementation
 
-If something goes wrong, you can revert to file-based storage:
-
-1. **Revert code:**
-   ```bash
-   git revert HEAD
-   git push origin main
-   ```
-
-2. **Railway will auto-deploy previous version**
-
-3. **Token files are still on Railway volumes** (not deleted)
-
-4. **Fallback to env vars** still works (env vars weren't deleted)
-
----
-
-## 📊 Benefits After Migration
-
-✅ **No more token conflicts** - Single source of truth  
-✅ **Instant synchronization** - Production and staging always in sync  
-✅ **Simpler debugging** - One place to check tokens  
-✅ **Better monitoring** - Database has `updated_at` timestamps  
-✅ **Local dev stays simple** - Still uses files  
-✅ **Production-ready** - Railway-native solution  
+✅ **No more token conflicts** - Only production writes tokens  
+✅ **Instant synchronization** - Staging always reads latest tokens  
+✅ **Simpler debugging** - One place to check tokens (production database)  
+✅ **Better monitoring** - Database timestamps show when tokens were updated  
+✅ **Local dev stays simple** - File-based with easy sync  
+✅ **Production-ready** - Railway-native PostgreSQL solution  
+✅ **Environment isolation** - Production and staging/dev use separate Slack workspaces
 
 ---
 
@@ -663,17 +480,6 @@ If something goes wrong, you can revert to file-based storage:
 
 ---
 
-## 💡 Future Improvements
-
-Once PostgreSQL is working, consider:
-
-1. **Token expiration tracking** - Store token expiry times
-2. **Audit log** - Track when tokens were refreshed and by which service
-3. **Health endpoint** - Expose token age for monitoring
-4. **Automatic token download** - Git hook to sync tokens on checkout
-
----
-
-**Last Updated:** 2025-10-25  
-**Status:** 📝 Planning - Not yet implemented  
+**Last Updated:** 2025-10-26  
+**Status:** ✅ Implemented - Ready for deployment  
 **Estimated Time:** 1-2 hours total implementation + testing
