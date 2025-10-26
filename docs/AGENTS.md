@@ -127,20 +127,49 @@ COPY *.py .
 ## 🔑 Key Implementation Details
 
 ### Token Management
-The bot uses a persistent token file (`fortnox_tokens.json`) to handle OAuth token rotation:
-- **Token rotation**: Fortnox issues new refresh tokens when you refresh access tokens
-- **Persistence**: Tokens are stored in `fortnox_tokens.json` (survives restarts)
-- **Auto-refresh**: Background thread refreshes tokens every 50 minutes
-- **Migration**: On first run, tokens are migrated from environment variables to file
-- **Railway deployment**: Uses Railway volume for persistence across deployments
-- **Fallback mechanism**: If file token expires, automatically falls back to environment variables and updates file
 
-**Resilience**: Environment variables serve as backup - if the token file becomes invalid, the bot automatically recovers using env vars and updates the file.
+#### **Multi-Environment Strategy (Production, Staging, Local)**
 
-**Important files**:
-- `token_manager.py` - Handles reading/writing tokens with thread-safe locking
-- `fortnox_tokens.json` - Stores current access_token and refresh_token (created automatically)
-- `scripts/get_fortnox_token.py` - Generates initial tokens via OAuth flow
+The bot uses **PostgreSQL for production/staging** and **file-based storage for local development**:
+
+**Production (Railway main branch):**
+- PostgreSQL database with read/write access
+- Refreshes tokens every 50 minutes
+- Saves updated tokens to database
+
+**Staging (Railway staging branch):**
+- Same PostgreSQL database (read-only via `TOKEN_STORAGE_READONLY=true`)
+- Reads tokens from database (production manages refresh)
+- Never refreshes tokens itself
+
+**Local Development:**
+- File-based storage (`fortnox_tokens.json`)
+- **MUST use `TOKEN_STORAGE_READONLY=true` in `.env`**
+- Sync tokens from production via: `./scripts/sync_tokens_from_db.sh`
+
+#### **⚠️ CRITICAL: Fortnox OAuth Token Behavior**
+
+**NEVER generate separate OAuth tokens for local development!**
+
+Fortnox **only allows ONE active OAuth session per application**. When you generate new tokens (via `scripts/get_fortnox_token.py`), it **invalidates ALL previous refresh tokens**, including production's tokens.
+
+**What happens if you generate new tokens locally:**
+1. Run `./venv/bin/python scripts/get_fortnox_token.py` locally
+2. ❌ **Production's refresh token is IMMEDIATELY INVALIDATED**
+3. ❌ Production bot fails with "invalid_grant" error
+4. ❌ Staging bot also fails (reads from same database)
+5. 💥 **Entire system breaks until you regenerate tokens in production**
+
+**Correct approach for local development:**
+1. Set `TOKEN_STORAGE_READONLY=true` in local `.env`
+2. Sync tokens from production: `./scripts/sync_tokens_from_db.sh`
+3. Never run `get_fortnox_token.py` unless you're intentionally updating production
+
+**Token Management Files:**
+- `src/token_manager.py` - Handles reading/writing tokens with thread-safe locking
+- `fortnox_tokens.json` - Stores current access_token and refresh_token locally (created automatically)
+- `scripts/get_fortnox_token.py` - ⚠️ **PRODUCTION ONLY** - Generates initial tokens via OAuth flow
+- `scripts/sync_tokens_from_db.sh` - Syncs tokens from production to local file
 
 ### Fortnox API Pagination
 The `fortnox_client.py` implements automatic pagination:
@@ -271,4 +300,4 @@ The `fortnox_client.py` implements automatic pagination:
 
 ---
 
-**Last Updated**: 2025-10-25
+**Last Updated**: 2025-10-26
