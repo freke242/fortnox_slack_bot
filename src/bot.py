@@ -10,14 +10,15 @@ import base64
 import threading
 import time
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Load environment variables FIRST (before importing our modules)
+load_dotenv()
+
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
-from dotenv import load_dotenv
 from src.fortnox_client import FortnoxClient, FortnoxRateLimitError
 from src.token_manager import TokenManager
-
-# Load environment variables
-load_dotenv()
 
 # Configure logging with split streams for Railway
 # INFO/DEBUG → stdout (blue), ERROR/WARNING/CRITICAL → stderr (red)
