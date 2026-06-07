@@ -783,7 +783,8 @@ if __name__ == "__main__":
         else:
             # Refresh Fortnox token at startup (production only)
             logger.info("Initializing Fortnox connection...")
-            if not refresh_fortnox_token():
+            startup_refresh_ok = refresh_fortnox_token() is True
+            if not startup_refresh_ok:
                 logger.error("=" * 70)
                 logger.error("❌ CRITICAL: Failed to refresh Fortnox token at startup")
                 logger.error("=" * 70)
