@@ -60,6 +60,11 @@ app = App(
 fortnox_client = None
 current_access_token = None
 token_manager = TokenManager()  # Manages persistent token storage
+_refresh_lock = threading.Lock()  # Prevents concurrent token refresh attempts
+
+
+# Sentinel value to distinguish a dead/invalid token from a transient network error
+_TOKEN_DEAD = object()
 
 
 def refresh_fortnox_token():
@@ -71,10 +76,23 @@ def refresh_fortnox_token():
     Fallback behavior: If token from file is expired, tries environment variables.
     
     Returns:
-        bool: True if successful, False otherwise
+        True if successful
+        False if a transient/network error occurred (safe to retry)
+        _TOKEN_DEAD sentinel if Fortnox returned 4xx (do NOT retry - token is burned)
     """
+    if not _refresh_lock.acquire(blocking=False):
+        logger.warning("⚠️  Token refresh already in progress, skipping duplicate attempt")
+        return False
+    try:
+        return _do_refresh_fortnox_token()
+    finally:
+        _refresh_lock.release()
+
+
+def _do_refresh_fortnox_token():
+    """Inner refresh logic, called only when lock is held."""
     global fortnox_client, current_access_token
-    
+
     logger.info("Refreshing Fortnox access token...")
     
     # Get refresh token from token manager (persistent storage)
@@ -235,11 +253,13 @@ def refresh_fortnox_token():
             
             logger.error(f"❌ Failed to refresh token: HTTP {response.status_code}")
             logger.error(f"   Response: {response.text}")
-            return False
+            if response.status_code < 500:
+                return _TOKEN_DEAD  # 4xx = token is burned, do not retry
+            return False  # 5xx = server error, safe to retry
             
     except requests.exceptions.RequestException as e:
         logger.error(f"❌ Network error while refreshing token: {e}")
-        return False
+        return False  # Network error, safe to retry
     except Exception as e:
         logger.error(f"❌ Unexpected error during token refresh: {e}", exc_info=True)
         return False
@@ -249,11 +269,32 @@ def token_refresh_scheduler():
     """
     Background thread that refreshes the token every 50 minutes.
     Also refreshes the HoReCa price list cache to get latest prices.
+    Retries up to 3 times (2 min apart) on transient/network errors only.
+    Does NOT retry on 4xx errors (token is burned - retrying makes it worse).
+
+    Fortnox token lifetimes (official):
+      - Access token:  1 hour
+      - Refresh token: 45 days (reset on each use via rotation)
+    Even if the access token lapses, the refresh token remains valid for 45 days.
     """
     while True:
         time.sleep(50 * 60)  # Sleep for 50 minutes
         logger.info("⏰ Scheduled token refresh triggered (includes price cache refresh)")
-        refresh_fortnox_token()
+        result = refresh_fortnox_token()
+        if result is _TOKEN_DEAD:
+            logger.error("🔴 Token is invalid/expired (4xx) - not retrying, requires re-authorization")
+        elif not result:
+            for attempt in range(1, 4):
+                logger.warning(f"⚠️  Transient error, retrying in 2 min (attempt {attempt}/3)...")
+                time.sleep(2 * 60)
+                retry_result = refresh_fortnox_token()
+                if retry_result is _TOKEN_DEAD:
+                    logger.error("🔴 Token is dead after retry - requires re-authorization")
+                    break
+                if retry_result:
+                    break
+            else:
+                logger.error("🔴 Token refresh failed after 3 retries - bot may stop working until next scheduled refresh")
 
 def format_kegs_message(kegs: list, show_all: bool = False) -> str:
     """
@@ -601,6 +642,89 @@ def handle_message_events(body, logger):
     logger.debug(f"Message event received: {body}")
 
 
+def start_bot_with_reconnection():
+    """
+    Start the bot with automatic reconnection handling.
+    Uses a watchdog thread to detect when the SDK gets stuck in reconnection loops.
+    Exits after max reconnects to trigger Railway container restart.
+    """
+    reconnect_count = 0
+    max_reconnects = 100  # Exit after this many reconnects to force fresh container restart
+    stuck_threshold = 90  # seconds - if stuck reconnecting this long, force restart
+    
+    def watchdog_monitor(handler_ref, start_time_ref, watchdog_id):
+        """Monitor for stuck reconnection loops and force restart if needed"""
+        time.sleep(stuck_threshold)
+        
+        # If we're still in the same handler instance after threshold, it's stuck
+        if handler_ref['current'] is not None:
+            elapsed = time.time() - start_time_ref['start']
+            logger.error(f"🚨 Handler stuck in reconnection loop for {int(elapsed)}s - forcing restart (watchdog #{watchdog_id})")
+            try:
+                handler_ref['current'].close()
+            except Exception as e:
+                logger.debug(f"Watchdog #{watchdog_id}: Error closing handler: {e}")
+    
+    while True:
+        handler_ref = {'current': None}
+        start_time_ref = {'start': time.time()}
+        
+        try:
+            reconnect_count += 1
+            
+            # Check if we've exceeded max reconnects
+            if reconnect_count > max_reconnects:
+                logger.error(f"🔴 Reached max reconnect limit ({max_reconnects}). Exiting to trigger Railway restart...")
+                logger.error("   This ensures a fresh container state after prolonged instability.")
+                exit(1)
+            
+            # Create a new handler for each connection attempt
+            handler = SocketModeHandler(
+                app, 
+                os.environ.get("SLACK_APP_TOKEN"),
+                trace_enabled=False
+            )
+            handler_ref['current'] = handler
+            
+            # Start watchdog thread to detect stuck reconnection
+            watchdog = threading.Thread(
+                target=watchdog_monitor,
+                args=(handler_ref, start_time_ref, reconnect_count),
+                daemon=True
+            )
+            watchdog.start()
+            
+            logger.info(f"🔌 Starting Socket Mode handler (attempt #{reconnect_count})...")
+            
+            # Start the handler - this blocks until connection drops or is forced closed
+            handler.start()
+            
+            # If we get here, connection was closed
+            handler_ref['current'] = None
+            elapsed = time.time() - start_time_ref['start']
+            
+            if elapsed < 30:
+                # Failed quickly - wait before retry
+                logger.warning(f"⚠️  Connection closed after {int(elapsed)}s - waiting 5s before reconnect")
+                time.sleep(5)
+            else:
+                # Ran successfully for a while
+                logger.info(f"✅ Connection ran for {int(elapsed)}s - reconnecting immediately")
+                reconnect_count = 0  # Reset counter on successful run
+                time.sleep(1)
+            
+        except KeyboardInterrupt:
+            logger.info("🛑 Bot stopped by user")
+            handler_ref['current'] = None
+            raise
+            
+        except Exception as e:
+            handler_ref['current'] = None
+            logger.error(f"❌ Connection error: {e}")
+            logger.info("⏳ Waiting 5s before reconnecting...")
+            time.sleep(5)
+
+
 # Start the app
 if __name__ == "__main__":
     try:
@@ -626,7 +750,18 @@ if __name__ == "__main__":
         # Initialize token file from environment variables if it doesn't exist
         # This migrates from env-based tokens to file-based tokens
         logger.info("Checking token storage...")
-        if not token_manager.initialize_from_env():
+        # If FORCE_TOKEN_FROM_ENV is set, always override storage with env vars
+        if os.environ.get("FORCE_TOKEN_FROM_ENV", "").lower() in ("1", "true", "yes"):
+            logger.info("🔄 FORCE_TOKEN_FROM_ENV set - overriding stored tokens with env vars")
+            env_access = os.environ.get("FORTNOX_ACCESS_TOKEN")
+            env_refresh = os.environ.get("FORTNOX_REFRESH_TOKEN")
+            if env_access and env_refresh:
+                token_manager.save_tokens(env_access, env_refresh)
+                logger.info("✅ Tokens overwritten from environment variables")
+            else:
+                logger.error("❌ FORCE_TOKEN_FROM_ENV set but env vars are missing")
+                exit(1)
+        elif not token_manager.initialize_from_env():
             logger.warning("⚠️  Could not initialize token file from environment")
             logger.warning("    Attempting to use existing token file...")
         
@@ -674,11 +809,13 @@ if __name__ == "__main__":
             refresh_thread = threading.Thread(target=token_refresh_scheduler, daemon=True)
             refresh_thread.start()
         
-        # Start the bot using Socket Mode
-        handler = SocketModeHandler(app, os.environ.get("SLACK_APP_TOKEN"))
+        # Start the bot using Socket Mode with reconnection handling
         logger.info("✅ Fortnox Slack Bot is running!")
-        handler.start()
+        start_bot_with_reconnection()
         
+    except KeyboardInterrupt:
+        logger.info("Bot stopped by user")
+        exit(0)
     except Exception as e:
         logger.error(f"Failed to start bot: {e}", exc_info=True)
         exit(1)
