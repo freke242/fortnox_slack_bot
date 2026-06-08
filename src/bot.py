@@ -645,64 +645,38 @@ def handle_message_events(body, logger):
 def start_bot_with_reconnection():
     """
     Start the bot with automatic reconnection handling.
-    Uses a watchdog thread to detect when the SDK gets stuck in reconnection loops.
     Exits after max reconnects to trigger Railway container restart.
     """
     reconnect_count = 0
     max_reconnects = 100  # Exit after this many reconnects to force fresh container restart
-    stuck_threshold = 90  # seconds - if stuck reconnecting this long, force restart
-    
-    def watchdog_monitor(handler_ref, start_time_ref, watchdog_id):
-        """Monitor for stuck reconnection loops and force restart if needed"""
-        time.sleep(stuck_threshold)
-        
-        # If we're still in the same handler instance after threshold, it's stuck
-        if handler_ref['current'] is not None:
-            elapsed = time.time() - start_time_ref['start']
-            logger.error(f"🚨 Handler stuck in reconnection loop for {int(elapsed)}s - forcing restart (watchdog #{watchdog_id})")
-            try:
-                handler_ref['current'].close()
-            except Exception as e:
-                logger.debug(f"Watchdog #{watchdog_id}: Error closing handler: {e}")
-    
+
     while True:
-        handler_ref = {'current': None}
-        start_time_ref = {'start': time.time()}
-        
+        start_time = time.time()
+
         try:
             reconnect_count += 1
-            
+
             # Check if we've exceeded max reconnects
             if reconnect_count > max_reconnects:
                 logger.error(f"🔴 Reached max reconnect limit ({max_reconnects}). Exiting to trigger Railway restart...")
                 logger.error("   This ensures a fresh container state after prolonged instability.")
                 exit(1)
-            
+
             # Create a new handler for each connection attempt
             handler = SocketModeHandler(
-                app, 
+                app,
                 os.environ.get("SLACK_APP_TOKEN"),
                 trace_enabled=False
             )
-            handler_ref['current'] = handler
-            
-            # Start watchdog thread to detect stuck reconnection
-            watchdog = threading.Thread(
-                target=watchdog_monitor,
-                args=(handler_ref, start_time_ref, reconnect_count),
-                daemon=True
-            )
-            watchdog.start()
-            
+
             logger.info(f"🔌 Starting Socket Mode handler (attempt #{reconnect_count})...")
-            
-            # Start the handler - this blocks until connection drops or is forced closed
+
+            # Start the handler - this blocks until connection drops
             handler.start()
-            
+
             # If we get here, connection was closed
-            handler_ref['current'] = None
-            elapsed = time.time() - start_time_ref['start']
-            
+            elapsed = time.time() - start_time
+
             if elapsed < 30:
                 # Failed quickly - wait before retry
                 logger.warning(f"⚠️  Connection closed after {int(elapsed)}s - waiting 5s before reconnect")
@@ -712,14 +686,12 @@ def start_bot_with_reconnection():
                 logger.info(f"✅ Connection ran for {int(elapsed)}s - reconnecting immediately")
                 reconnect_count = 0  # Reset counter on successful run
                 time.sleep(1)
-            
+
         except KeyboardInterrupt:
             logger.info("🛑 Bot stopped by user")
-            handler_ref['current'] = None
             raise
-            
+
         except Exception as e:
-            handler_ref['current'] = None
             logger.error(f"❌ Connection error: {e}")
             logger.info("⏳ Waiting 5s before reconnecting...")
             time.sleep(5)
