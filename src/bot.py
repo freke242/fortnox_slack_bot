@@ -141,7 +141,7 @@ def _do_refresh_fortnox_token():
                 "Content-Type": "application/x-www-form-urlencoded",
                 "Authorization": f"Basic {encoded_credentials}"
             },
-            timeout=10
+            timeout=45
         )
         
         # Check response
@@ -204,7 +204,7 @@ def _do_refresh_fortnox_token():
                                 "Content-Type": "application/x-www-form-urlencoded",
                                 "Authorization": f"Basic {encoded_credentials}"
                             },
-                            timeout=10
+                            timeout=45
                         )
                         
                         if fallback_response.status_code == 200:
@@ -257,6 +257,37 @@ def _do_refresh_fortnox_token():
                 return _TOKEN_DEAD  # 4xx = token is burned, do not retry
             return False  # 5xx = server error, safe to retry
             
+    except requests.exceptions.Timeout as e:
+        logger.critical(
+            "🔴 CRITICAL: Timeout while refreshing Fortnox token (%s). "
+            "A token rotation desync may have occurred: Fortnox may have "
+            "invalidated the old refresh token and issued a new one that "
+            "we never received. Automatic retries may fail with "
+            "invalid_grant and lock us out.", e
+        )
+        try:
+            admin_channel = os.environ.get("SLACK_ADMIN_CHANNEL_ID")
+            if admin_channel:
+                app.client.chat_postMessage(
+                    channel=admin_channel,
+                    text=(
+                        "⚠️ :warning: *Fortnox token refresh timed out.* "
+                        "A token rotation desync may have occurred — Fortnox "
+                        "may have rotated the refresh token without us "
+                        "receiving the new one. If automatic retries fail "
+                        "with `invalid_grant`, manual re-authorization is "
+                        "required: run `get_fortnox_token.py` and restart "
+                        "the bot."
+                    )
+                )
+            else:
+                logger.warning(
+                    "⚠️  SLACK_ADMIN_CHANNEL_ID not set - cannot send "
+                    "admin alert about possible token rotation desync"
+                )
+        except Exception as slack_error:
+            logger.error(f"❌ Failed to send admin alert to Slack: {slack_error}")
+        return False  # Timeout, safe to retry (but desync is possible)
     except requests.exceptions.RequestException as e:
         logger.error(f"❌ Network error while refreshing token: {e}")
         return False  # Network error, safe to retry
